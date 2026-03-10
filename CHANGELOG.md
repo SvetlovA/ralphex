@@ -1,5 +1,29 @@
 # Changelog
 
+## v0.21.0 - 2026-03-10
+
+### New Features
+
+- Add AWS Bedrock support for Docker wrapper (#169) @bronislav
+
+### Improved
+
+- Refactor docker wrapper to use argparse for CLI parsing (#183) @bronislav
+- Update default codex model to gpt-5.4
+- Bump golang.org/x/sys from 0.41.0 to 0.42.0 (#190) @app/dependabot
+- Bump docker/build-push-action from 6 to 7 (#189) @app/dependabot
+- Bump docker/setup-buildx-action from 3 to 4 (#188) @app/dependabot
+- Bump docker/login-action from 3 to 4 (#187) @app/dependabot
+- Add FAQ entry for custom gate steps in task prompt
+- Fix broken relative links in README for MkDocs site
+
+### Fixed
+
+- Commit pending changes after external review loop early exit (#186) @umputun
+- Isolate integration tests from global config
+- Exclude gosec G118 from lint config
+- Use compact date format in goreleaser version string
+
 ## v0.20.0 - 2026-03-03
 
 ### New Features
