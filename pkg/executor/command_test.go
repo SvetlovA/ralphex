@@ -150,12 +150,36 @@ func TestCommandFactory_CommandContext(t *testing.T) {
 			expectArgs: []string{"status"},
 		},
 		{
+			name:       "windows with no extension passes through",
+			goos:       "windows",
+			cmdName:    "claude",
+			args:       []string{"-p", "test"},
+			expectCmd:  "claude",
+			expectArgs: []string{"-p", "test"},
+		},
+		{
 			name:       "linux with cmd file passes through",
 			goos:       "linux",
 			cmdName:    "claude.cmd",
 			args:       []string{"--verbose"},
 			expectCmd:  "claude.cmd",
 			expectArgs: []string{"--verbose"},
+		},
+		{
+			name:       "darwin with bat file passes through",
+			goos:       "darwin",
+			cmdName:    "script.bat",
+			args:       []string{"arg1"},
+			expectCmd:  "script.bat",
+			expectArgs: []string{"arg1"},
+		},
+		{
+			name:       "windows with no args",
+			goos:       "windows",
+			cmdName:    "claude.cmd",
+			args:       nil,
+			expectCmd:  "cmd",
+			expectArgs: []string{"/C", "claude.cmd"},
 		},
 	}
 

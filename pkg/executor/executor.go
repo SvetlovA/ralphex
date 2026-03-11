@@ -59,7 +59,7 @@ func (r *execClaudeRunner) Run(ctx context.Context, name string, args ...string)
 
 	// use exec.Command (not CommandContext) because we handle cancellation ourselves
 	// to ensure the entire process group is killed, not just the direct child
-	cmd := (CommandFactory{}).Command(name, args...) //nolint:noctx // intentional: we handle context cancellation via process group kill
+	cmd := CommandFactory{}.Command(name, args...) //nolint:noctx // intentional: we handle context cancellation via process group kill
 
 	// filter out ANTHROPIC_API_KEY (claude uses different auth) and CLAUDECODE (prevents nested session errors)
 	cmd.Env = filterEnv(os.Environ(), "ANTHROPIC_API_KEY", "CLAUDECODE")
