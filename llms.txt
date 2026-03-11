@@ -80,7 +80,7 @@ RALPHEX_CLAUDE_PROVIDER=bedrock ralphex docs/plans/feature.md
 - `fzf` - for plan selection (optional)
 - `codex` - for external review (optional)
 
-**Windows:** ralphex runs on Windows. npm-installed CLIs (`claude.cmd`, `codex.cmd`) are automatically wrapped with `cmd /C` — no manual configuration needed. Limitations: graceful shutdown kills direct process only (not child processes), and active session detection via file locking is unavailable.
+**Windows:** ralphex runs on Windows. npm-installed CLIs (`claude.cmd`, `codex.cmd`) are automatically wrapped with `cmd /C` via `command.Factory` — no manual configuration needed. Limitations: graceful shutdown kills direct process only (not child processes), and active session detection via file locking is unavailable.
 
 ## Customization
 

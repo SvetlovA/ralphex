@@ -1,4 +1,4 @@
-package executor
+package command
 
 import (
 	"context"
@@ -33,7 +33,7 @@ func TestIsBatchFile(t *testing.T) {
 	}
 }
 
-func TestCommandFactory_Command(t *testing.T) {
+func TestFactory_Command(t *testing.T) {
 	tests := []struct {
 		name       string
 		goos       string
@@ -102,7 +102,7 @@ func TestCommandFactory_Command(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			f := CommandFactory{goos: tc.goos}
+			f := Factory{goos: tc.goos}
 			cmd := f.Command(tc.cmdName, tc.args...)
 
 			// cmd.Args[0] is the command name as passed, cmd.Path may be resolved via LookPath
@@ -112,7 +112,7 @@ func TestCommandFactory_Command(t *testing.T) {
 	}
 }
 
-func TestCommandFactory_CommandContext(t *testing.T) {
+func TestFactory_CommandContext(t *testing.T) {
 	tests := []struct {
 		name       string
 		goos       string
@@ -182,7 +182,7 @@ func TestCommandFactory_CommandContext(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
-			f := CommandFactory{goos: tc.goos}
+			f := Factory{goos: tc.goos}
 			cmd := f.CommandContext(ctx, tc.cmdName, tc.args...)
 
 			// cmd.Args[0] is the command name as passed, cmd.Path may be resolved via LookPath

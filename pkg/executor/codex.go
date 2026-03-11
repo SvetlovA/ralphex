@@ -7,6 +7,8 @@ import (
 	"io"
 	"os"
 	"strings"
+
+	"github.com/umputun/ralphex/pkg/command"
 )
 
 // CodexStreams holds both stderr and stdout from codex command.
@@ -33,7 +35,7 @@ func (r *execCodexRunner) Run(ctx context.Context, name string, args ...string) 
 
 	// use exec.Command (not CommandContext) because we handle cancellation ourselves
 	// to ensure the entire process group is killed, not just the direct child
-	cmd := CommandFactory{}.Command(name, args...) //nolint:noctx // intentional: we handle context cancellation via process group kill
+	cmd := command.Factory{}.Command(name, args...) //nolint:noctx // intentional: we handle context cancellation via process group kill
 
 	// create new process group so we can kill all descendants on cleanup
 	setupProcessGroup(cmd)

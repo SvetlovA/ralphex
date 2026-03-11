@@ -3,7 +3,7 @@
 ## Overview
 
 - On Windows, executables installed via npm (like `claude`, `codex`) create `.cmd` shim files that require `cmd /C` prefix to run correctly via `exec.Command`
-- Create a `CommandFactory` type in `pkg/executor/` that wraps `exec.Command` and `exec.CommandContext`, automatically prepending `cmd /C` when running `.cmd`/`.bat` files on Windows
+- Create a `command.Factory` type in `pkg/command/` that wraps `exec.Command` and `exec.CommandContext`, automatically prepending `cmd /C` when running `.cmd`/`.bat` files on Windows
 - Update all production `exec.Command`/`exec.CommandContext` call sites across the project to use the new wrapper
 
 ## Context (from discovery)
@@ -22,7 +22,7 @@ Existing platform-specific patterns:
 - `pkg/progress/flock_unix.go` / `flock_windows.go` — build tag pairs for file locking
 - This feature uses `runtime.GOOS` (no platform-specific imports needed), so a single file is appropriate
 
-No import cycles: `pkg/executor` only imports `pkg/status`, so `pkg/git`, `pkg/input`, `pkg/plan`, and `pkg/notify` can safely import it.
+No import cycles: `pkg/command` has no internal dependencies, so all packages can safely import it.
 
 ## Development Approach
 

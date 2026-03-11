@@ -30,6 +30,7 @@ go mod tidy && go mod vendor                             # tidy and re-vendor
 ```
 cmd/ralphex/        # main entry point, CLI parsing
 pkg/config/         # configuration loading, defaults, prompts, agents
+pkg/command/        # platform-aware exec.Cmd creation (Windows .cmd/.bat wrapper)
 pkg/executor/       # claude and codex CLI execution
 pkg/git/            # git operations (external git CLI)
 pkg/input/          # terminal input collector (fzf/fallback, draft review)
@@ -70,7 +71,7 @@ docs/plans/         # plan files location
 - File watching for multi-session dashboard using fsnotify
 - Optional finalize step after successful reviews (disabled by default)
 - Optional notifications on completion/failure via Telegram, Email, Slack, Webhook, or custom script (best-effort, disabled by default)
-- `CommandFactory` in `pkg/executor/command.go` wraps `exec.Command`/`exec.CommandContext` to automatically prepend `cmd /C` for `.cmd`/`.bat` files on Windows. All new `exec.Command`/`exec.CommandContext` calls in production code must use `CommandFactory{}` instead of the stdlib functions directly
+- `command.Factory` in `pkg/command/command.go` wraps `exec.Command`/`exec.CommandContext` to automatically prepend `cmd /C` for `.cmd`/`.bat` files on Windows. All new `exec.Command`/`exec.CommandContext` calls in production code must use `command.Factory{}` instead of the stdlib functions directly
 
 ### Finalize Step
 
@@ -205,7 +206,7 @@ Key files:
 - **Windows:** builds and runs, but with limitations:
   - Process group signals not available (graceful shutdown kills direct process only, not child processes)
   - File locking not available (active session detection disabled)
-  - `.cmd`/`.bat` wrapper: npm-installed CLIs (e.g., `claude.cmd`, `codex.cmd`) are automatically wrapped with `cmd /C` via `CommandFactory` — no manual configuration needed
+  - `.cmd`/`.bat` wrapper: npm-installed CLIs (e.g., `claude.cmd`, `codex.cmd`) are automatically wrapped with `cmd /C` via `command.Factory` — no manual configuration needed
 
 ### Cross-Platform Development
 
@@ -214,7 +215,7 @@ When adding platform-specific code (syscalls, signals, file locking):
 2. Create separate files: `foo_unix.go` and `foo_windows.go`
 3. Keep common code in the main file, extract platform-specific functions
 4. Windows stubs can be no-ops where functionality is optional
-5. When platform-specific behavior needs only `runtime.GOOS` (no platform-specific imports), use a single file instead of build-tag pairs. See `pkg/executor/command.go` for an example
+5. When platform-specific behavior needs only `runtime.GOOS` (no platform-specific imports), use a single file instead of build-tag pairs. See `pkg/command/command.go` for an example
 
 Example files:
 - `pkg/executor/procgroup_unix.go` / `procgroup_windows.go` - process group management

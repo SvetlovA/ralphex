@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/umputun/ralphex/pkg/executor"
+	"github.com/umputun/ralphex/pkg/command"
 )
 
 // customChannel runs a user script for notifications.
@@ -26,7 +26,7 @@ func (c *customChannel) send(ctx context.Context, r Result) error {
 		return fmt.Errorf("marshal result: %w", err)
 	}
 
-	cmd := executor.CommandFactory{}.CommandContext(ctx, c.scriptPath)
+	cmd := command.Factory{}.CommandContext(ctx, c.scriptPath)
 	cmd.Stdin = bytes.NewReader(data)
 
 	var stdout, stderr bytes.Buffer
