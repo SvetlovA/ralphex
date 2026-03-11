@@ -102,11 +102,7 @@ func TestCommandFactory_Command(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			old := goos
-			goos = tc.goos
-			t.Cleanup(func() { goos = old })
-
-			f := CommandFactory{}
+			f := CommandFactory{goos: tc.goos}
 			cmd := f.Command(tc.cmdName, tc.args...)
 
 			// cmd.Args[0] is the command name as passed, cmd.Path may be resolved via LookPath
@@ -185,12 +181,8 @@ func TestCommandFactory_CommandContext(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			old := goos
-			goos = tc.goos
-			t.Cleanup(func() { goos = old })
-
 			ctx := context.Background()
-			f := CommandFactory{}
+			f := CommandFactory{goos: tc.goos}
 			cmd := f.CommandContext(ctx, tc.cmdName, tc.args...)
 
 			// cmd.Args[0] is the command name as passed, cmd.Path may be resolved via LookPath

@@ -8,17 +8,25 @@ import (
 	"strings"
 )
 
-// goos is the current operating system, overridable in tests.
-var goos = runtime.GOOS
-
 // CommandFactory creates exec.Cmd instances with platform-appropriate adaptations.
 // on Windows, .cmd and .bat files are automatically wrapped with cmd /C.
-type CommandFactory struct{}
+// zero value is ready to use (defaults to runtime.GOOS).
+type CommandFactory struct {
+	goos string // operating system override for testing; empty means runtime.GOOS
+}
+
+// os returns the effective operating system string.
+func (f CommandFactory) os() string {
+	if f.goos != "" {
+		return f.goos
+	}
+	return runtime.GOOS
+}
 
 // Command creates an exec.Cmd for the given program and arguments.
 // on Windows, if name has a .cmd or .bat extension, prepends "cmd /C".
 func (f CommandFactory) Command(name string, args ...string) *exec.Cmd {
-	if goos == "windows" && isBatchFile(name) {
+	if f.os() == "windows" && isBatchFile(name) {
 		return exec.Command("cmd", append([]string{"/C", name}, args...)...)
 	}
 	return exec.Command(name, args...)
@@ -27,7 +35,7 @@ func (f CommandFactory) Command(name string, args ...string) *exec.Cmd {
 // CommandContext creates an exec.Cmd with context for the given program and arguments.
 // on Windows, if name has a .cmd or .bat extension, prepends "cmd /C".
 func (f CommandFactory) CommandContext(ctx context.Context, name string, args ...string) *exec.Cmd {
-	if goos == "windows" && isBatchFile(name) {
+	if f.os() == "windows" && isBatchFile(name) {
 		return exec.CommandContext(ctx, "cmd", append([]string{"/C", name}, args...)...)
 	}
 	return exec.CommandContext(ctx, name, args...)
