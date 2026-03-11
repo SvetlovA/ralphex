@@ -116,8 +116,8 @@ No import cycles: `pkg/executor` only imports `pkg/status`, so `pkg/git`, `pkg/i
 
 ### Task 6: [Final] Update documentation
 
-- [ ] update `CLAUDE.md` Platform Support section to mention `.cmd`/`.bat` wrapper
-- [ ] add `CommandFactory` to the Key Patterns section in `CLAUDE.md` if appropriate
+- [x] update `CLAUDE.md` Platform Support section to mention `.cmd`/`.bat` wrapper
+- [x] add `CommandFactory` to the Key Patterns section in `CLAUDE.md` if appropriate
 
 ## Technical Details
 

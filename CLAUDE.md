@@ -70,6 +70,7 @@ docs/plans/         # plan files location
 - File watching for multi-session dashboard using fsnotify
 - Optional finalize step after successful reviews (disabled by default)
 - Optional notifications on completion/failure via Telegram, Email, Slack, Webhook, or custom script (best-effort, disabled by default)
+- `CommandFactory` in `pkg/executor/command.go` wraps `exec.Command`/`exec.CommandContext` to automatically prepend `cmd /C` for `.cmd`/`.bat` files on Windows (used across all packages that shell out to external commands)
 
 ### Finalize Step
 
@@ -204,6 +205,7 @@ Key files:
 - **Windows:** builds and runs, but with limitations:
   - Process group signals not available (graceful shutdown kills direct process only, not child processes)
   - File locking not available (active session detection disabled)
+  - `.cmd`/`.bat` wrapper: npm-installed CLIs (e.g., `claude.cmd`, `codex.cmd`) are automatically wrapped with `cmd /C` via `CommandFactory` — no manual configuration needed
 
 ### Cross-Platform Development
 
