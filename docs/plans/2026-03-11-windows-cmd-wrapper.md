@@ -72,12 +72,12 @@ No import cycles: `pkg/executor` only imports `pkg/status`, so `pkg/git`, `pkg/i
 
 ### Task 2: Update pkg/executor call sites (executor.go, codex.go, custom.go)
 
-- [ ] add `cmdFactory CommandFactory` field (or use zero-value directly) in relevant executor structs, or use package-level `CommandFactory{}` instance
-- [ ] update `pkg/executor/executor.go:63` — replace `exec.Command(name, args...)` with `CommandFactory{}.Command(name, args...)`
-- [ ] update `pkg/executor/codex.go:37` — replace `exec.Command(name, args...)` with `CommandFactory{}.Command(name, args...)`
-- [ ] update `pkg/executor/custom.go:29` — replace `exec.Command(script, promptFile)` with `CommandFactory{}.Command(script, promptFile)`
-- [ ] verify existing tests in `pkg/executor/` still pass (they use mocked runners, not real exec)
-- [ ] run `make test` and `make lint` — must pass before next task
+- [x] add `cmdFactory CommandFactory` field (or use zero-value directly) in relevant executor structs, or use package-level `CommandFactory{}` instance
+- [x] update `pkg/executor/executor.go:63` — replace `exec.Command(name, args...)` with `CommandFactory{}.Command(name, args...)`
+- [x] update `pkg/executor/codex.go:37` — replace `exec.Command(name, args...)` with `CommandFactory{}.Command(name, args...)`
+- [x] update `pkg/executor/custom.go:29` — replace `exec.Command(script, promptFile)` with `CommandFactory{}.Command(script, promptFile)`
+- [x] verify existing tests in `pkg/executor/` still pass (they use mocked runners, not real exec)
+- [x] run `make test` and `make lint` — must pass before next task
 
 ### Task 3: Update pkg/git/external.go call sites
 
