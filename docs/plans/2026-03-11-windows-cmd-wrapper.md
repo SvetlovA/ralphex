@@ -81,19 +81,19 @@ No import cycles: `pkg/executor` only imports `pkg/status`, so `pkg/git`, `pkg/i
 
 ### Task 3: Update pkg/git/external.go call sites
 
-- [ ] import `pkg/executor` in `pkg/git/external.go`
-- [ ] add `cmdFactory executor.CommandFactory` field to `externalBackend` struct (or use zero-value inline)
-- [ ] update `newExternalBackend` (line 31) — replace `exec.CommandContext(...)` with `CommandFactory{}.CommandContext(...)`
-- [ ] update `run` method (line 57) — replace `exec.CommandContext(...)` with `CommandFactory{}.CommandContext(...)`
-- [ ] update `hasCommits` (line 127) — same replacement
-- [ ] update `currentBranch` (line 149) — same replacement
-- [ ] update `getDefaultBranch` (line 173) — same replacement
-- [ ] update `isIgnored` (line 299) — same replacement
-- [ ] update `diffStats` (line 413) — same replacement
-- [ ] update `resolveRef` fallback (line 479) — same replacement
-- [ ] update `refExists` (line 490) — same replacement
-- [ ] verify existing tests in `pkg/git/` still pass
-- [ ] run `make test` and `make lint` — must pass before next task
+- [x] import `pkg/executor` in `pkg/git/external.go`
+- [x] add `cmdFactory executor.CommandFactory` field to `externalBackend` struct (or use zero-value inline)
+- [x] update `newExternalBackend` (line 31) — replace `exec.CommandContext(...)` with `CommandFactory{}.CommandContext(...)`
+- [x] update `run` method (line 57) — replace `exec.CommandContext(...)` with `CommandFactory{}.CommandContext(...)`
+- [x] update `hasCommits` (line 127) — same replacement
+- [x] update `currentBranch` (line 149) — same replacement
+- [x] update `getDefaultBranch` (line 173) — same replacement
+- [x] update `isIgnored` (line 299) — same replacement
+- [x] update `diffStats` (line 413) — same replacement
+- [x] update `resolveRef` fallback (line 479) — same replacement
+- [x] update `refExists` (line 490) — same replacement
+- [x] verify existing tests in `pkg/git/` still pass
+- [x] run `make test` and `make lint` — must pass before next task
 
 ### Task 4: Update pkg/input, pkg/plan, pkg/notify call sites
 
