@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/umputun/ralphex/pkg/executor"
 	"github.com/umputun/ralphex/pkg/input"
 	"github.com/umputun/ralphex/pkg/progress"
 )
@@ -106,7 +107,7 @@ func (s *Selector) selectWithFzf(ctx context.Context) (string, error) {
 	}
 
 	// use fzf for selection
-	cmd := exec.CommandContext(ctx, "fzf",
+	cmd := executor.CommandFactory{}.CommandContext(ctx, "fzf",
 		"--prompt=select plan: ",
 		"--preview=head -50 {}",
 		"--preview-window=right:60%",

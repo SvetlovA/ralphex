@@ -15,6 +15,8 @@ import (
 
 	"github.com/charmbracelet/glamour"
 	"github.com/pmezard/go-difflib/difflib"
+
+	"github.com/umputun/ralphex/pkg/executor"
 )
 
 // readLineResult holds the result of reading a line
@@ -130,7 +132,7 @@ func (c *TerminalCollector) hasFzf() bool {
 func (c *TerminalCollector) selectWithFzf(ctx context.Context, question string, options []string) (string, error) {
 	input := strings.Join(options, "\n")
 
-	cmd := exec.CommandContext(ctx, "fzf", "--prompt", question+": ", "--height", "10", "--layout=reverse")
+	cmd := executor.CommandFactory{}.CommandContext(ctx, "fzf", "--prompt", question+": ", "--height", "10", "--layout=reverse")
 	cmd.Stdin = strings.NewReader(input)
 	cmd.Stderr = os.Stderr
 
@@ -386,7 +388,7 @@ func (c *TerminalCollector) openEditor(ctx context.Context, content string) (str
 
 	args := append([]string{}, parts[1:]...)
 	args = append(args, tmpPath)
-	cmd := exec.CommandContext(ctx, editorPath, args...) //nolint:gosec // editor is user-configured
+	cmd := executor.CommandFactory{}.CommandContext(ctx, editorPath, args...) //nolint:gosec // editor is user-configured
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

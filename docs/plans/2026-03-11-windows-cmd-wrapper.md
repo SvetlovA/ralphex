@@ -97,12 +97,12 @@ No import cycles: `pkg/executor` only imports `pkg/status`, so `pkg/git`, `pkg/i
 
 ### Task 4: Update pkg/input, pkg/plan, pkg/notify call sites
 
-- [ ] update `pkg/input/input.go:133` (fzf) — replace `exec.CommandContext(ctx, "fzf", ...)` with `CommandFactory{}.CommandContext(ctx, "fzf", ...)`
-- [ ] update `pkg/input/input.go:389` (editor) — replace `exec.CommandContext(ctx, editorPath, args...)` with `CommandFactory{}.CommandContext(ctx, editorPath, args...)`
-- [ ] update `pkg/plan/plan.go:109` (fzf) — replace `exec.CommandContext(ctx, "fzf", ...)` with `CommandFactory{}.CommandContext(ctx, "fzf", ...)`
-- [ ] update `pkg/notify/custom.go:28` (script) — replace `exec.CommandContext(ctx, c.scriptPath)` with `CommandFactory{}.CommandContext(ctx, c.scriptPath)`
-- [ ] verify existing tests in `pkg/input/`, `pkg/plan/`, `pkg/notify/` still pass
-- [ ] run `make test` and `make lint` — must pass before next task
+- [x] update `pkg/input/input.go:133` (fzf) — replace `exec.CommandContext(ctx, "fzf", ...)` with `CommandFactory{}.CommandContext(ctx, "fzf", ...)`
+- [x] update `pkg/input/input.go:389` (editor) — replace `exec.CommandContext(ctx, editorPath, args...)` with `CommandFactory{}.CommandContext(ctx, editorPath, args...)`
+- [x] update `pkg/plan/plan.go:109` (fzf) — replace `exec.CommandContext(ctx, "fzf", ...)` with `CommandFactory{}.CommandContext(ctx, "fzf", ...)`
+- [x] update `pkg/notify/custom.go:28` (script) — replace `exec.CommandContext(ctx, c.scriptPath)` with `CommandFactory{}.CommandContext(ctx, c.scriptPath)`
+- [x] verify existing tests in `pkg/input/`, `pkg/plan/`, `pkg/notify/` still pass
+- [x] run `make test` and `make lint` — must pass before next task
 
 ### Task 5: Verify acceptance criteria
 
