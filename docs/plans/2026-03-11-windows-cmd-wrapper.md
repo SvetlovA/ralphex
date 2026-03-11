@@ -106,13 +106,13 @@ No import cycles: `pkg/executor` only imports `pkg/status`, so `pkg/git`, `pkg/i
 
 ### Task 5: Verify acceptance criteria
 
-- [ ] verify all `exec.Command` and `exec.CommandContext` production call sites are updated (grep to confirm none remain outside tests)
-- [ ] verify edge cases are handled: empty extension, uppercase `.CMD`, path with dots in directory name
-- [ ] run full test suite: `make test`
-- [ ] run linter: `make lint` — all issues must be fixed
-- [ ] run `make fmt` — code is properly formatted
-- [ ] cross-compile verify: `GOOS=windows GOARCH=amd64 go build ./...`
-- [ ] verify test coverage for `command.go` meets 80%+
+- [x] verify all `exec.Command` and `exec.CommandContext` production call sites are updated (grep to confirm none remain outside tests)
+- [x] verify edge cases are handled: empty extension, uppercase `.CMD`, path with dots in directory name
+- [x] run full test suite: `make test`
+- [x] run linter: `make lint` — all issues must be fixed
+- [x] run `make fmt` — code is properly formatted
+- [x] cross-compile verify: `GOOS=windows GOARCH=amd64 go build ./...`
+- [x] verify test coverage for `command.go` meets 80%+
 
 ### Task 6: [Final] Update documentation
 
