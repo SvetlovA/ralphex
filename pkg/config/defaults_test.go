@@ -351,6 +351,7 @@ func TestDefaultsInstaller_Install_MkdirAllFailure(t *testing.T) {
 }
 
 func TestDefaultsInstaller_Install_WriteFileFailure(t *testing.T) {
+	skipIfNoChmod(t)
 	tmpDir := t.TempDir()
 	configDir := filepath.Join(tmpDir, "config")
 	require.NoError(t, os.MkdirAll(configDir, 0o700))
@@ -368,6 +369,7 @@ func TestDefaultsInstaller_Install_WriteFileFailure(t *testing.T) {
 }
 
 func TestDefaultsInstaller_installDefaultFiles_ReadDirPermissionDenied(t *testing.T) {
+	skipIfNoChmod(t)
 	tmpDir := t.TempDir()
 	destDir := filepath.Join(tmpDir, "dest")
 	require.NoError(t, os.MkdirAll(destDir, 0o700))
@@ -383,6 +385,7 @@ func TestDefaultsInstaller_installDefaultFiles_ReadDirPermissionDenied(t *testin
 }
 
 func TestDefaultsInstaller_installDefaultFiles_WriteFilePermissionDenied(t *testing.T) {
+	skipIfNoChmod(t)
 	tmpDir := t.TempDir()
 	destDir := filepath.Join(tmpDir, "dest")
 	require.NoError(t, os.MkdirAll(destDir, 0o700))

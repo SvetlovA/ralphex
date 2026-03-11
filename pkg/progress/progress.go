@@ -158,7 +158,9 @@ func NewLogger(cfg Config, colors *Colors, holder *status.PhaseHolder) (*Logger,
 		}
 	}
 
-	f, err := os.OpenFile(progressPath, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0o600) //nolint:gosec // path derived from plan filename
+	// open without O_APPEND to allow Truncate on Windows (O_APPEND + Truncate = Access Denied).
+	// writes still go to end of file because we seek to end after the truncation check.
+	f, err := os.OpenFile(progressPath, os.O_CREATE|os.O_RDWR, 0o600) //nolint:gosec // path derived from plan filename
 	if err != nil {
 		return nil, fmt.Errorf("open progress file: %w", err)
 	}
@@ -195,7 +197,23 @@ func NewLogger(cfg Config, colors *Colors, holder *status.PhaseHolder) (*Logger,
 			f.Close()
 			return nil, fmt.Errorf("truncate completed progress file: %w", tErr)
 		}
+		if _, sErr := f.Seek(0, io.SeekStart); sErr != nil {
+			_ = unlockFile(f)
+			unregisterActiveLock(f.Name())
+			f.Close()
+			return nil, fmt.Errorf("seek after truncate: %w", sErr)
+		}
 		restart = false
+	}
+
+	// seek to end so writes append (needed because file was opened without O_APPEND)
+	if restart {
+		if _, sErr := f.Seek(0, io.SeekEnd); sErr != nil {
+			_ = unlockFile(f)
+			unregisterActiveLock(f.Name())
+			f.Close()
+			return nil, fmt.Errorf("seek to end: %w", sErr)
+		}
 	}
 
 	l := &Logger{

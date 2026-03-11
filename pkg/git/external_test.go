@@ -837,9 +837,9 @@ func TestExternalBackend_toRelative(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("returns repo-relative path unchanged", func(t *testing.T) {
-		rel, err := eb.toRelative("docs/plans/test.md")
+		rel, err := eb.toRelative(filepath.Join("docs", "plans", "test.md"))
 		require.NoError(t, err)
-		assert.Equal(t, "docs/plans/test.md", rel)
+		assert.Equal(t, filepath.Join("docs", "plans", "test.md"), rel)
 	})
 
 	t.Run("rejects .. path", func(t *testing.T) {
@@ -856,7 +856,8 @@ func TestExternalBackend_toRelative(t *testing.T) {
 	})
 
 	t.Run("rejects absolute path outside repo", func(t *testing.T) {
-		_, err := eb.toRelative("/tmp/outside/file.txt")
+		outsidePath := filepath.Join(t.TempDir(), "outside", "file.txt")
+		_, err := eb.toRelative(outsidePath)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "outside repository")
 	})

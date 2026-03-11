@@ -345,6 +345,7 @@ func TestAgentLoader_loadFileWithFallback_FallsBackToEmbedded(t *testing.T) {
 }
 
 func TestAgentLoader_dirHasAgentFiles_PermissionDenied(t *testing.T) {
+	skipIfNoChmod(t)
 	tmpDir := t.TempDir()
 	agentsDir := filepath.Join(tmpDir, "agents")
 	require.NoError(t, os.MkdirAll(agentsDir, 0o700))
@@ -360,6 +361,7 @@ func TestAgentLoader_dirHasAgentFiles_PermissionDenied(t *testing.T) {
 }
 
 func TestAgentLoader_loadFromDir_PermissionDenied(t *testing.T) {
+	skipIfNoChmod(t)
 	tmpDir := t.TempDir()
 	agentsDir := filepath.Join(tmpDir, "agents")
 	require.NoError(t, os.MkdirAll(agentsDir, 0o700))
@@ -375,6 +377,7 @@ func TestAgentLoader_loadFromDir_PermissionDenied(t *testing.T) {
 }
 
 func TestAgentLoader_loadFileWithFallback_PermissionDenied(t *testing.T) {
+	skipIfNoChmod(t)
 	tmpDir := t.TempDir()
 	agentFile := filepath.Join(tmpDir, "agent.txt")
 	require.NoError(t, os.WriteFile(agentFile, []byte("content"), 0o600))

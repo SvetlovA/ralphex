@@ -711,6 +711,7 @@ color_task = #0000ff
 }
 
 func TestLoad_SymlinkedConfigDir(t *testing.T) {
+	skipIfNoSymlink(t)
 	// simulates real-world scenario where ~/.config/ralphex is symlinked from another repo
 	tmpDir := t.TempDir()
 
@@ -965,6 +966,7 @@ notify_timeout_ms = 5000
 }
 
 func TestLoad_SymlinkedLocalDir(t *testing.T) {
+	skipIfNoSymlink(t)
 	// simulates local .ralphex being a symlink to shared project config
 	tmpDir := t.TempDir()
 

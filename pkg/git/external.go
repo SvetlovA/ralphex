@@ -271,6 +271,10 @@ func (e *externalBackend) hasChangesOtherThan(path string) ([]string, error) {
 		return nil, err
 	}
 
+	// normalize to forward slashes for comparison with git output,
+	// which always uses forward slashes even on Windows.
+	rel = filepath.ToSlash(rel)
+
 	// use -uall to list individual files, not collapsed directories
 	out, err := e.run("status", "--porcelain", "-uall")
 	if err != nil {
