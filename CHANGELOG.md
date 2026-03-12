@@ -1,5 +1,40 @@
 # Changelog
 
+## v0.21.3 - 2026-03-11
+
+### Fixed
+
+- Use sentinel error to prevent infinite retry on I/O failures in plan draft review
+- Output invalid selection warnings to stdout instead of log for consistent interactive flow
+- Fix test name mismatch ("retry then accepts" → "retry then rejects")
+
+## v0.21.2 - 2026-03-11
+
+### Improved
+
+- Harden workflows, upgrade actions, fix caching (#184) @paskal
+- Revert golangci-lint pinning to latest
+
+### Fixed
+
+- Retry invalid selections in plan draft review (#202) @umputun
+
+## v0.21.1 - 2026-03-11
+
+### New Features
+
+- Add opencode-as-claude wrapper and opencode-review scripts (#199) @mschedrin
+
+### Improved
+
+- Add python tests for docker wrapper script
+
+### Fixed
+
+- Prevent false positive pattern matching on clean codex/custom exit (#200) @umputun
+- Prevent custom review output duplication in progress log (#198) @umputun
+- Ensure test creates temp claude config dir for Linux CI
+
 ## v0.21.0 - 2026-03-10
 
 ### New Features

@@ -19,6 +19,11 @@ import (
 	"github.com/umputun/ralphex/pkg/command"
 )
 
+// errInvalidInput is a sentinel error for validation failures in selectWithNumbers (bad number, out of range).
+// read/IO errors are not wrapped with this sentinel, so callers can distinguish retriable validation
+// failures from fatal read errors.
+var errInvalidInput = errors.New("invalid input")
+
 // readLineResult holds the result of reading a line
 type readLineResult struct {
 	line string
@@ -54,11 +59,13 @@ func ReadLineWithContext(ctx context.Context, reader *bufio.Reader) (string, err
 type Collector interface {
 	// AskQuestion presents a question with options and returns the selected answer.
 	// An "Other" option is appended automatically; if chosen, the user types a free-text answer.
-	// Returns the selected or typed text, or error if selection fails.
+	// Returns the selected or typed text, or error if selection fails (including invalid input).
 	AskQuestion(ctx context.Context, question string, options []string) (string, error)
 
 	// AskDraftReview presents a plan draft for review with Accept/Revise/Interactive review/Reject options.
 	// Returns the selected action ("accept", "revise", or "reject") and feedback text (empty for accept/reject).
+	// Invalid selections (bad number, out of range) are retried with a warning;
+	// only fatal errors (EOF, context cancellation) return an error.
 	AskDraftReview(ctx context.Context, question string, planContent string) (action string, feedback string, err error)
 }
 
@@ -191,11 +198,11 @@ func (c *TerminalCollector) selectWithNumbers(ctx context.Context, question stri
 	line = strings.TrimSpace(line)
 	num, err := strconv.Atoi(line)
 	if err != nil {
-		return "", fmt.Errorf("invalid number: %s", line)
+		return "", fmt.Errorf("%w: %s", errInvalidInput, line)
 	}
 
 	if num < 1 || num > len(options) {
-		return "", fmt.Errorf("selection out of range: %d (must be 1-%d)", num, len(options))
+		return "", fmt.Errorf("%w: %d (must be 1-%d)", errInvalidInput, num, len(options))
 	}
 
 	selected := options[num-1]
@@ -287,6 +294,12 @@ func (c *TerminalCollector) AskDraftReview(ctx context.Context, question, planCo
 	for {
 		action, selectErr := c.selectWithNumbers(ctx, question, options, reader)
 		if selectErr != nil {
+			// only validation errors (bad number, out of range) are retriable
+			if errors.Is(selectErr, errInvalidInput) {
+				_, _ = fmt.Fprintf(stdout, "invalid selection, please try again: %v\n", selectErr)
+				continue
+			}
+			// everything else is fatal (EOF, context cancellation, I/O errors)
 			return "", "", fmt.Errorf("select action: %w", selectErr)
 		}
 
