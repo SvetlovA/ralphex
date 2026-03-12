@@ -30,7 +30,7 @@ func newExternalBackend(path, command string) (*externalBackend, error) {
 	}
 
 	// validate path is a repo and get the toplevel
-	cmd := cmdpkg.Factory{}.CommandContext(context.Background(), command, "rev-parse", "--show-toplevel")
+	cmd := cmdpkg.Wrapper{}.CommandContext(context.Background(), command, "rev-parse", "--show-toplevel")
 	cmd.Dir = absPath
 	out, err := cmd.Output()
 	if err != nil {
@@ -56,7 +56,7 @@ func newExternalBackend(path, command string) (*externalBackend, error) {
 // leading whitespace is preserved (important for porcelain format parsing).
 // on failure, returns error with the combined output for diagnostics.
 func (e *externalBackend) run(args ...string) (string, error) {
-	cmd := cmdpkg.Factory{}.CommandContext(context.Background(), e.command, args...)
+	cmd := cmdpkg.Wrapper{}.CommandContext(context.Background(), e.command, args...)
 	cmd.Dir = e.path
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -126,7 +126,7 @@ func (e *externalBackend) diffFingerprint() (string, error) {
 
 // HasCommits returns true if the repository has at least one commit.
 func (e *externalBackend) hasCommits() (bool, error) {
-	cmd := cmdpkg.Factory{}.CommandContext(context.Background(), e.command, "rev-parse", "HEAD")
+	cmd := cmdpkg.Wrapper{}.CommandContext(context.Background(), e.command, "rev-parse", "HEAD")
 	cmd.Dir = e.path
 	cmd.Env = append(os.Environ(), "LC_ALL=C") // force English stderr for reliable parsing
 	if _, err := cmd.Output(); err != nil {
@@ -148,7 +148,7 @@ func (e *externalBackend) hasCommits() (bool, error) {
 
 // CurrentBranch returns the name of the current branch, or empty string for detached HEAD.
 func (e *externalBackend) currentBranch() (string, error) {
-	cmd := cmdpkg.Factory{}.CommandContext(context.Background(), e.command, "symbolic-ref", "--short", "HEAD")
+	cmd := cmdpkg.Wrapper{}.CommandContext(context.Background(), e.command, "symbolic-ref", "--short", "HEAD")
 	cmd.Dir = e.path
 	cmd.Env = append(os.Environ(), "LC_ALL=C") // force English stderr for reliable parsing
 	out, err := cmd.Output()
@@ -172,7 +172,7 @@ func (e *externalBackend) currentBranch() (string, error) {
 // detects from origin/HEAD symbolic reference, falls back to checking common branch names.
 func (e *externalBackend) getDefaultBranch() string {
 	// try origin/HEAD first
-	cmd := cmdpkg.Factory{}.CommandContext(context.Background(), e.command, "symbolic-ref", "refs/remotes/origin/HEAD")
+	cmd := cmdpkg.Wrapper{}.CommandContext(context.Background(), e.command, "symbolic-ref", "refs/remotes/origin/HEAD")
 	cmd.Dir = e.path
 	out, err := cmd.Output()
 	if err == nil {
@@ -302,7 +302,7 @@ func (e *externalBackend) hasChangesOtherThan(path string) ([]string, error) {
 
 // IsIgnored checks if a path is ignored by gitignore rules.
 func (e *externalBackend) isIgnored(path string) (bool, error) {
-	cmd := cmdpkg.Factory{}.CommandContext(context.Background(), e.command, "check-ignore", "-q", "--", path)
+	cmd := cmdpkg.Wrapper{}.CommandContext(context.Background(), e.command, "check-ignore", "-q", "--", path)
 	cmd.Dir = e.path
 	err := cmd.Run()
 	if err == nil {
@@ -416,7 +416,7 @@ func (e *externalBackend) diffStats(baseBranch string) (DiffStats, error) {
 		return DiffStats{}, nil //nolint:nilerr // no HEAD means no stats
 	}
 
-	baseCmd := cmdpkg.Factory{}.CommandContext(context.Background(), e.command, "rev-parse", baseRef)
+	baseCmd := cmdpkg.Wrapper{}.CommandContext(context.Background(), e.command, "rev-parse", baseRef)
 	baseCmd.Dir = e.path
 	baseOut, err := baseCmd.Output()
 	if err != nil {
@@ -482,7 +482,7 @@ func (e *externalBackend) resolveRef(branchName string) string {
 	}
 
 	// try as arbitrary ref (commit hash, tag, etc.) via rev-parse
-	cmd := cmdpkg.Factory{}.CommandContext(context.Background(), e.command, "rev-parse", "--verify", "--quiet", branchName)
+	cmd := cmdpkg.Wrapper{}.CommandContext(context.Background(), e.command, "rev-parse", "--verify", "--quiet", branchName)
 	cmd.Dir = e.path
 	if cmd.Run() == nil {
 		return branchName
@@ -493,7 +493,7 @@ func (e *externalBackend) resolveRef(branchName string) string {
 
 // refExists checks if a git reference exists.
 func (e *externalBackend) refExists(ref string) bool {
-	cmd := cmdpkg.Factory{}.CommandContext(context.Background(), e.command, "show-ref", "--verify", "--quiet", ref)
+	cmd := cmdpkg.Wrapper{}.CommandContext(context.Background(), e.command, "show-ref", "--verify", "--quiet", ref)
 	cmd.Dir = e.path
 	return cmd.Run() == nil
 }

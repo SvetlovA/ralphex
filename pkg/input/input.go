@@ -132,7 +132,7 @@ func (c *TerminalCollector) hasFzf() bool {
 func (c *TerminalCollector) selectWithFzf(ctx context.Context, question string, options []string) (string, error) {
 	input := strings.Join(options, "\n")
 
-	cmd := command.Factory{}.CommandContext(ctx, "fzf", "--prompt", question+": ", "--height", "10", "--layout=reverse")
+	cmd := command.Wrapper{}.CommandContext(ctx, "fzf", "--prompt", question+": ", "--height", "10", "--layout=reverse")
 	cmd.Stdin = strings.NewReader(input)
 	cmd.Stderr = os.Stderr
 
@@ -388,7 +388,7 @@ func (c *TerminalCollector) openEditor(ctx context.Context, content string) (str
 
 	args := append([]string{}, parts[1:]...)
 	args = append(args, tmpPath)
-	cmd := command.Factory{}.CommandContext(ctx, editorPath, args...) //nolint:gosec // editor is user-configured
+	cmd := command.Wrapper{}.CommandContext(ctx, editorPath, args...) //nolint:gosec // editor is user-configured
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

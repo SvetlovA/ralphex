@@ -27,7 +27,7 @@ func (r *execCustomRunner) Run(ctx context.Context, script, promptFile string) (
 
 	// use exec.Command (not CommandContext) because we handle cancellation ourselves
 	// to ensure the entire process group is killed, not just the direct child
-	cmd := command.Factory{}.Command(script, promptFile) //nolint:noctx // intentional: we handle context cancellation via process group kill
+	cmd := command.Wrapper{}.Command(script, promptFile) //nolint:noctx // intentional: we handle context cancellation via process group kill
 
 	// create new process group so we can kill all descendants on cleanup
 	setupProcessGroup(cmd)
