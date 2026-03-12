@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.21.2 - 2026-03-11
+
+### Improved
+
+- Harden workflows, upgrade actions, fix caching (#184) @paskal
+- Revert golangci-lint pinning to latest
+
+### Fixed
+
+- Retry invalid selections in plan draft review (#202) @umputun
+
 ## v0.21.1 - 2026-03-11
 
 ### New Features
