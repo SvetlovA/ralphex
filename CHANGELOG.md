@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.21.3 - 2026-03-11
+
+### Fixed
+
+- Use sentinel error to prevent infinite retry on I/O failures in plan draft review
+- Output invalid selection warnings to stdout instead of log for consistent interactive flow
+- Fix test name mismatch ("retry then accepts" → "retry then rejects")
+
 ## v0.21.2 - 2026-03-11
 
 ### Improved
