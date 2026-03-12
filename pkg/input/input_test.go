@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -679,6 +680,9 @@ func TestTerminalCollector_computeDiff(t *testing.T) {
 
 func TestTerminalCollector_openEditor(t *testing.T) {
 	t.Run("writes content and reads it back", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("uses Unix-only command (true)")
+		}
 		// use "true" as editor — it does nothing, file stays unchanged
 		t.Setenv("EDITOR", "true")
 		t.Setenv("VISUAL", "")
@@ -691,6 +695,9 @@ func TestTerminalCollector_openEditor(t *testing.T) {
 	})
 
 	t.Run("VISUAL takes precedence over EDITOR", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("uses Unix-only commands (true/false)")
+		}
 		t.Setenv("VISUAL", "true")
 		t.Setenv("EDITOR", "false") // would fail if used
 
@@ -724,6 +731,9 @@ func TestTerminalCollector_openEditor(t *testing.T) {
 	})
 
 	t.Run("editor with arguments", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("uses Unix-only commands (env/true)")
+		}
 		// use "env true" as a multi-word editor command to verify argument splitting
 		t.Setenv("VISUAL", "")
 		t.Setenv("EDITOR", "env true")
@@ -734,6 +744,9 @@ func TestTerminalCollector_openEditor(t *testing.T) {
 	})
 
 	t.Run("editor exits with error returns error", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("uses Unix-only command (false)")
+		}
 		// "false" exits with code 1
 		t.Setenv("VISUAL", "")
 		t.Setenv("EDITOR", "false")
@@ -757,6 +770,9 @@ func TestTerminalCollector_openEditor(t *testing.T) {
 	})
 
 	t.Run("whitespace-padded EDITOR is trimmed", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("uses Unix-only command (false)")
+		}
 		// exercises the real editor-launch path with whitespace-padded env vars.
 		// verifies strings.TrimSpace correctly handles padded editor values.
 		t.Setenv("VISUAL", "")
@@ -769,6 +785,10 @@ func TestTerminalCollector_openEditor(t *testing.T) {
 	})
 
 	t.Run("temp file is cleaned up", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("uses Unix-only command (false)")
+		}
+
 		t.Setenv("VISUAL", "")
 		t.Setenv("EDITOR", "true")
 
