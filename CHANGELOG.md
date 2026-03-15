@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.22.0 - 2026-03-15
+
+### New Features
+
+- Dry run flag for docker wrapper script #213 @bronislav
+- Introduce gemini-as-claude wrapper #212 @korjavin
+- Externalize codex review prompt as configurable template #216 @umputun
+- Add codex_review.txt template file and config wiring
+- Add {{PREVIOUS_REVIEW_CONTEXT}} variable and refactor buildCodexPrompt to use template
+
+### Improved
+
+- Reorganize scripts/ into functional subdirectories #210 @umputun
+- Show progress log path at completion #204 @DmitriyAlergant
+- Deduplicate local config detection when it matches global dir
+- Document worktree mode limitations and review workaround
+
+### Fixed
+
+- Use --output instead of --format for aws export-credentials #203 @bronislav
+- Pass progress file to external review prompts for iteration history
+
 ## v0.21.3 - 2026-03-11
 
 ### Fixed
