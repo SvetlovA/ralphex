@@ -32,6 +32,7 @@ func Test_defaultsFS_PromptFiles(t *testing.T) {
 		{file: "defaults/prompts/review_first.txt", contains: []string{"{{GOAL}}", "{{PROGRESS_FILE}}", "RALPHEX:REVIEW_DONE", "{{agent:quality}}", "{{agent:testing}}"}},
 		{file: "defaults/prompts/review_second.txt", contains: []string{"{{GOAL}}", "{{PROGRESS_FILE}}", "RALPHEX:REVIEW_DONE", "{{agent:quality}}", "{{agent:implementation}}"}},
 		{file: "defaults/prompts/codex.txt", contains: []string{"{{CODEX_OUTPUT}}", "RALPHEX:CODEX_REVIEW_DONE", "Codex reviewed"}},
+		{file: "defaults/prompts/codex_review.txt", contains: []string{"{{DIFF_INSTRUCTION}}", "{{PROGRESS_FILE}}", "{{PREVIOUS_REVIEW_CONTEXT}}", "{{PLAN_FILE}}"}},
 	}
 
 	for _, tc := range testCases {
@@ -55,6 +56,7 @@ func Test_defaultsFS_AllFilesPresent(t *testing.T) {
 		"defaults/prompts/review_first.txt",
 		"defaults/prompts/review_second.txt",
 		"defaults/prompts/codex.txt",
+		"defaults/prompts/codex_review.txt",
 	}
 
 	for _, file := range expectedFiles {
@@ -122,6 +124,7 @@ func TestLoad_PopulatesAllFields(t *testing.T) {
 	assert.NotEmpty(t, cfg.ReviewFirstPrompt)
 	assert.NotEmpty(t, cfg.ReviewSecondPrompt)
 	assert.NotEmpty(t, cfg.CodexPrompt)
+	assert.NotEmpty(t, cfg.CodexReviewPrompt)
 }
 
 func TestLoad_WithUserConfig(t *testing.T) {
@@ -1004,4 +1007,88 @@ claude_command = local-symlinked-claude
 
 	// verify localDir is the symlink path
 	assert.Equal(t, symlinkLocalDir, cfg.LocalDir())
+}
+
+func TestDetectLocalDir_DeduplicatesSamePath(t *testing.T) {
+	// when globalDir points to .ralphex/ in cwd, detectLocalDir should return empty
+	// to avoid double-loading the same directory (issue #214)
+	tmpDir := t.TempDir()
+	localDir := filepath.Join(tmpDir, ".ralphex")
+	require.NoError(t, os.MkdirAll(localDir, 0o700))
+
+	origDir, err := os.Getwd()
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, os.Chdir(origDir)) })
+	require.NoError(t, os.Chdir(tmpDir))
+
+	// relative path pointing to the same .ralphex/ that auto-detection would find
+	result := detectLocalDir(".ralphex")
+	assert.Empty(t, result, "should skip local when it resolves to same path as globalDir")
+
+	// absolute path pointing to the same directory
+	result = detectLocalDir(localDir)
+	assert.Empty(t, result, "should skip local when globalDir is the same absolute path")
+}
+
+func TestDetectLocalDir_DifferentPaths(t *testing.T) {
+	tmpDir := t.TempDir()
+	localDir := filepath.Join(tmpDir, ".ralphex")
+	require.NoError(t, os.MkdirAll(localDir, 0o700))
+
+	origDir, err := os.Getwd()
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, os.Chdir(origDir)) })
+	require.NoError(t, os.Chdir(tmpDir))
+
+	// different globalDir should allow local detection
+	globalDir := filepath.Join(tmpDir, "global-config")
+	result := detectLocalDir(globalDir)
+	assert.NotEmpty(t, result, "should detect local dir when globalDir is different")
+	assert.Contains(t, result, ".ralphex")
+}
+
+func TestDetectLocalDir_NoLocalDir(t *testing.T) {
+	tmpDir := t.TempDir()
+	// no .ralphex/ directory in tmpDir
+
+	origDir, err := os.Getwd()
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, os.Chdir(origDir)) })
+	require.NoError(t, os.Chdir(tmpDir))
+
+	result := detectLocalDir(filepath.Join(tmpDir, "global-config"))
+	assert.Empty(t, result)
+}
+
+func TestLoad_ConfigDirSameAsLocal_NotifyParams(t *testing.T) {
+	// regression test for issue #214: when --config-dir points to .ralphex/,
+	// notify settings in that directory should still be loaded correctly
+	tmpDir := t.TempDir()
+	localDir := filepath.Join(tmpDir, ".ralphex")
+	require.NoError(t, os.MkdirAll(localDir, 0o700))
+	require.NoError(t, os.MkdirAll(filepath.Join(localDir, "prompts"), 0o700))
+	require.NoError(t, os.MkdirAll(filepath.Join(localDir, "agents"), 0o700))
+
+	configContent := `
+notify_channels = custom
+notify_on_error = true
+notify_on_complete = true
+notify_custom_script = /path/to/notify.sh
+`
+	require.NoError(t, os.WriteFile(filepath.Join(localDir, "config"), []byte(configContent), 0o600))
+
+	origDir, err := os.Getwd()
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, os.Chdir(origDir)) })
+	require.NoError(t, os.Chdir(tmpDir))
+
+	// simulate --config-dir .ralphex
+	cfg, err := Load(localDir)
+	require.NoError(t, err)
+
+	assert.Equal(t, []string{"custom"}, cfg.NotifyParams.Channels)
+	assert.True(t, cfg.NotifyParams.OnError)
+	assert.True(t, cfg.NotifyParams.OnComplete)
+	assert.Equal(t, "/path/to/notify.sh", cfg.NotifyParams.CustomScript)
+	assert.Empty(t, cfg.LocalDir(), "localDir should be empty when same as globalDir")
 }

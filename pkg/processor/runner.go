@@ -93,6 +93,13 @@ type GitChecker interface {
 	DiffFingerprint() (string, error)
 }
 
+// Executors groups the executor dependencies for the Runner.
+type Executors struct {
+	Claude Executor
+	Codex  Executor
+	Custom *executor.CustomExecutor
+}
+
 // Runner orchestrates the execution loop.
 type Runner struct {
 	cfg            Config
@@ -169,11 +176,11 @@ func New(cfg Config, log Logger, holder *status.PhaseHolder) *Runner {
 		}
 	}
 
-	return NewWithExecutors(cfg, log, claudeExec, codexExec, customExec, holder)
+	return NewWithExecutors(cfg, log, Executors{Claude: claudeExec, Codex: codexExec, Custom: customExec}, holder)
 }
 
 // NewWithExecutors creates a new Runner with custom executors (for testing).
-func NewWithExecutors(cfg Config, log Logger, claude, codex Executor, custom *executor.CustomExecutor, holder *status.PhaseHolder) *Runner {
+func NewWithExecutors(cfg Config, log Logger, execs Executors, holder *status.PhaseHolder) *Runner {
 	// determine iteration delay from config or default
 	iterDelay := DefaultIterationDelay
 	if cfg.IterationDelayMs > 0 {
@@ -198,9 +205,9 @@ func NewWithExecutors(cfg Config, log Logger, claude, codex Executor, custom *ex
 	return &Runner{
 		cfg:            cfg,
 		log:            log,
-		claude:         claude,
-		codex:          codex,
-		custom:         custom,
+		claude:         execs.Claude,
+		codex:          execs.Codex,
+		custom:         execs.Custom,
 		phaseHolder:    holder,
 		iterationDelay: iterDelay,
 		taskRetryCount: retryCount,
@@ -436,7 +443,7 @@ func (r *Runner) runClaudeReview(ctx context.Context, prompt string) error {
 		return errors.New("review failed (FAILED signal received)")
 	}
 
-	if !IsReviewDone(result.Signal) {
+	if !isReviewDone(result.Signal) {
 		r.log.Print("warning: first review pass did not complete cleanly, continuing...")
 	}
 
@@ -479,7 +486,7 @@ func (r *Runner) runClaudeReviewLoop(ctx context.Context, promptPrefix ...string
 			return errors.New("review failed (FAILED signal received)")
 		}
 
-		if IsReviewDone(result.Signal) {
+		if isReviewDone(result.Signal) {
 			r.log.Print("claude review complete - no more findings")
 			return nil
 		}
@@ -704,7 +711,7 @@ func (r *Runner) runExternalReviewLoop(ctx context.Context, cfg externalReviewCo
 		claudeResponse = claudeResult.Output
 
 		// exit only when claude sees "no findings"
-		if IsCodexDone(claudeResult.Signal) {
+		if isCodexDone(claudeResult.Signal) {
 			r.log.Print("%s review complete - no more findings", cfg.name)
 			return nil
 		}
@@ -764,56 +771,10 @@ func (r *Runner) isManualBreak(parentCtx context.Context) bool {
 }
 
 // buildCodexPrompt creates the prompt for codex review.
+// uses the codex_review prompt loaded from config with all variables expanded,
+// including {{PREVIOUS_REVIEW_CONTEXT}} for iteration context.
 func (r *Runner) buildCodexPrompt(isFirst bool, claudeResponse string) string {
-	// build plan context if available
-	planContext := ""
-	if r.cfg.PlanFile != "" {
-		planContext = fmt.Sprintf(`
-## Plan Context
-The code implements the plan at: %s
-
----
-`, r.resolvePlanFilePath())
-	}
-
-	// different diff command based on iteration
-	var diffInstruction, diffDescription string
-	if isFirst {
-		defaultBranch := r.getDefaultBranch()
-		diffInstruction = fmt.Sprintf("Run: git diff %s...HEAD", defaultBranch)
-		diffDescription = fmt.Sprintf("code changes between %s and HEAD branch", defaultBranch)
-	} else {
-		diffInstruction = "Run: git diff"
-		diffDescription = "uncommitted changes (Claude's fixes from previous iteration)"
-	}
-
-	basePrompt := fmt.Sprintf(`%sReview the %s.
-
-%s
-
-Analyze for:
-- Bugs and logic errors
-- Security vulnerabilities
-- Race conditions
-- Error handling gaps
-- Code quality issues
-
-Report findings with file:line references. If no issues found, say "NO ISSUES FOUND".`, planContext, diffDescription, diffInstruction)
-
-	if claudeResponse != "" {
-		return fmt.Sprintf(`%s
-
----
-PREVIOUS REVIEW CONTEXT:
-Claude (previous reviewer) responded to your findings:
-
-%s
-
-Re-evaluate considering Claude's arguments. If Claude's fixes are correct, acknowledge them.
-If Claude's arguments are invalid, explain why the issues still exist.`, basePrompt, claudeResponse)
-	}
-
-	return basePrompt
+	return r.replaceVariablesWithIteration(r.cfg.AppConfig.CodexReviewPrompt, isFirst, claudeResponse)
 }
 
 // hasUncompletedTasks checks if plan file has any uncompleted checkboxes.
@@ -897,10 +858,10 @@ type draftReviewResult struct {
 // handlePlanDraft processes PLAN_DRAFT signal if present in output.
 // returns result indicating whether draft was handled and any feedback/errors.
 func (r *Runner) handlePlanDraft(ctx context.Context, output string) draftReviewResult {
-	planContent, draftErr := ParsePlanDraftPayload(output)
+	planContent, draftErr := parsePlanDraftPayload(output)
 	if draftErr != nil {
 		// log malformed signals (but not "no signal" which is expected)
-		if !errors.Is(draftErr, ErrNoPlanDraftSignal) {
+		if !errors.Is(draftErr, errNoPlanDraftSignal) {
 			r.log.Print("warning: %v", draftErr)
 		}
 		return draftReviewResult{handled: false}
@@ -935,10 +896,10 @@ func (r *Runner) handlePlanDraft(ctx context.Context, output string) draftReview
 // returns true if question was found and handled, false otherwise.
 // returns error if question handling failed.
 func (r *Runner) handlePlanQuestion(ctx context.Context, output string) (bool, error) {
-	question, err := ParseQuestionPayload(output)
+	question, err := parseQuestionPayload(output)
 	if err != nil {
 		// log malformed signals (but not "no signal" which is expected)
-		if !errors.Is(err, ErrNoQuestionSignal) {
+		if !errors.Is(err, errNoQuestionSignal) {
 			r.log.Print("warning: %v", err)
 		}
 		return false, nil
@@ -1005,7 +966,7 @@ func (r *Runner) runPlanCreation(ctx context.Context) error {
 		}
 
 		// check for PLAN_READY signal
-		if IsPlanReady(result.Signal) {
+		if isPlanReady(result.Signal) {
 			r.log.Print("plan creation completed")
 			return nil
 		}
