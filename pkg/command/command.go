@@ -28,9 +28,9 @@ func (w Wrapper) os() string {
 // on Windows, if name has a .cmd or .bat extension, prepends "cmd /C".
 func (w Wrapper) Command(name string, args ...string) *exec.Cmd {
 	if w.needCmdWrap(name) {
-		return exec.Command("cmd", append([]string{"/C", name}, args...)...)
+		return exec.Command("cmd", append([]string{"/C", name}, args...)...) //nolint:noctx // intentional: we handle context cancellation via process group kill
 	}
-	return exec.Command(name, args...)
+	return exec.Command(name, args...) //nolint:noctx // intentional: we handle context cancellation via process group kill
 }
 
 // CommandContext creates an exec.Cmd with context for the given program and arguments.

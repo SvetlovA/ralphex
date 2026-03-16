@@ -401,7 +401,7 @@ func (c *TerminalCollector) openEditor(ctx context.Context, content string) (str
 
 	args := append([]string{}, parts[1:]...)
 	args = append(args, tmpPath)
-	cmd := command.Wrapper{}.CommandContext(ctx, editorPath, args...) //nolint:gosec // editor is user-configured
+	cmd := command.Wrapper{}.CommandContext(ctx, editorPath, args...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
