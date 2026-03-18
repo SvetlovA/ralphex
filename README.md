@@ -326,8 +326,22 @@ Then use `ralphex` as usual - it runs in a container with Claude Code and Codex 
 - `CLAUDE_CONFIG_DIR` - Claude config directory (default: `~/.claude`). Use for alternate Claude installations (e.g., `~/.claude2`). Works both with Docker wrapper (volume mounts and keychain derivation) and non-Docker usage (passed through to Claude Code directly). Keychain service name is derived automatically from the path.
 - `RALPHEX_EXTRA_VOLUMES` - Extra volume mounts, comma-separated (e.g., `/data:/mnt/data:ro,/models:/mnt/models`). Entries without `:` are silently skipped
 - `RALPHEX_EXTRA_ENV` - Extra environment variables, comma-separated (e.g., `DEBUG=1,API_KEY`). Format: `VAR=value` or `VAR` (inherit from host). Security warning emitted for sensitive names (KEY, SECRET, TOKEN, etc.) with explicit values - use name-only form for secure credential passing
+- `RALPHEX_DOCKER_SOCKET` - Enable Docker socket mount: `1`, `true`, or `yes` (Docker wrapper only). CLI flag: `--docker`
 - `TZ` - Override container timezone (default: auto-detected from host via `/etc/localtime`). Example: `TZ=Europe/Berlin ralphex docs/plans/feature.md`
 - `RALPHEX_CLAUDE_PROVIDER` - Claude provider mode: `default` or `bedrock` (Docker wrapper only)
+
+**Docker socket support:**
+
+The `--docker` flag (or `RALPHEX_DOCKER_SOCKET=1`) mounts the host Docker socket into the container, enabling testcontainers and Docker-dependent workflows:
+
+```bash
+ralphex --docker docs/plans/feature.md
+ralphex --docker --dry-run   # verify socket mount in command
+```
+
+- Auto-detects socket GID and passes `DOCKER_GID` env var for baseimage group setup
+- Emits security warning on Linux (macOS has VM isolation, no warning needed)
+- Exits with error if socket file doesn't exist (fail-fast, no silent degradation)
 
 **AWS Bedrock support:**
 
@@ -415,6 +429,7 @@ Two images are published:
 | Node.js/npm | 24.x | Required for Claude Code |
 | Python/pip | 3.x | Scripts and automation |
 | git | 2.x | Version control |
+| docker-cli | - | Docker client for container workflows |
 | make | 4.x | Build automation |
 | gcc, musl-dev | - | C compiler for native extensions |
 | bash | 5.x | Shell |
@@ -523,6 +538,9 @@ ralphex --review-patience=3 docs/plans/feature.md
 # wait and retry on rate limit (instead of exiting)
 ralphex --wait 1h docs/plans/feature.md
 
+# set per-session timeout to kill hanging claude sessions
+ralphex --session-timeout 30m docs/plans/feature.md
+
 # with web dashboard
 ralphex --serve docs/plans/feature.md
 
@@ -544,6 +562,7 @@ ralphex --serve --port 3000 docs/plans/feature.md
 | `-b, --base-ref` | Override default branch for review diffs (branch name or commit hash) | auto-detect |
 | `--skip-finalize` | Skip finalize step even if enabled in config | false |
 | `--wait` | Wait duration before retrying on rate limit (e.g., `1h`, `30m`) | disabled |
+| `--session-timeout` | Per-session timeout for claude (e.g., `30m`, `1h`). Kills hanging sessions | disabled |
 | `--worktree` | Run in isolated git worktree (full and tasks-only modes only) | false |
 | `--plan` | Create plan interactively (provide description) | - |
 | `-s, --serve` | Start web dashboard for real-time streaming | false |
@@ -585,6 +604,7 @@ Add JWT-based authentication to the API.
 **Requirements:**
 - Task headers must use `### Task N:` or `### Iteration N:` format (N can be integer or non-integer like `2.5`, `2a`)
 - Checkboxes: `- [ ]` (incomplete) or `- [x]` (completed)
+- Checkboxes belong only in Task sections (`### Task N:` or `### Iteration N:`). Do not put checkboxes in Success criteria, Overview, or Context — they cause extra loop iterations. The agent handles them gracefully when present, but plan authors should avoid them for best behavior.
 - Include `## Validation Commands` section with test/lint commands
 - Place plans in `docs/plans/` directory (configurable via `plans_dir`)
 
@@ -797,6 +817,7 @@ Use `--config-dir` or `RALPHEX_CONFIG_DIR` to override the global config locatio
 | `claude_limit_patterns` | Limit patterns for claude triggering wait+retry (comma-separated) | `You've hit your limit` |
 | `codex_limit_patterns` | Limit patterns for codex triggering wait+retry (comma-separated) | `Rate limit,quota exceeded` |
 | `wait_on_limit` | Wait duration before retrying on rate limit (e.g., `1h`, `30m`) | disabled |
+| `session_timeout` | Per-session timeout for claude (e.g., `30m`, `1h`). Kills hanging sessions | disabled |
 
 Colors use 24-bit RGB (true color), supported natively by all modern terminals (iTerm2, Kitty, Terminal.app, Windows Terminal, GNOME Terminal, Alacritty, Zed, VS Code, etc). Older terminals will degrade gracefully. Use `--no-color` to disable colors entirely.
 

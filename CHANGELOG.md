@@ -1,5 +1,44 @@
 # Changelog
 
+## v0.24.2 - 2026-03-18
+
+### Fixed
+
+- Kill orphaned child processes on normal exit #227 @umputun
+
+## v0.24.1 - 2026-03-17
+
+### Fixed
+
+- Fix wrapText continuation lines using reduced width instead of full terminal width
+
+## v0.24.0 - 2026-03-17
+
+### New Features
+
+- Add session_timeout config option for hanging session safety net #225 @umputun
+
+### Fixed
+
+- Prevent infinite loop when checkboxes are outside Task sections #222 @romrigger
+- Fix progress output text wrapping and code smells #226 @umputun
+
+## v0.23.0 - 2026-03-16
+
+### New Features
+
+- Support host Docker socket mounting in container for Docker-dependent workflows #223 @umputun
+
+### Improved
+
+- Code smells cleanup: structure and convention improvements #217 @umputun
+- Bump golang.org/x/term from 0.40.0 to 0.41.0 #219 @app/dependabot
+- Bump github.com/charmbracelet/glamour from 0.10.0 to 1.0.0 #218 @app/dependabot
+
+### Fixed
+
+- Pass Claude prompt via stdin to avoid Windows cmd.exe length limit #220 @stanurkov
+
 ## v0.22.0 - 2026-03-15
 
 ### New Features

@@ -60,6 +60,7 @@ docs/plans/         # plan files location
 
 ## Key Patterns
 
+- Plan format: Checkboxes (`- [ ]` / `- [x]`) belong only in Task sections (`### Task N:` or `### Iteration N:`). Success criteria, Overview, and Context should not use checkboxes — they cause extra loop iterations. The task prompt handles them when present, but plan authors should avoid them.
 - Signal-based completion detection (COMPLETED, FAILED, REVIEW_DONE signals) — constants in `pkg/status/`
 - Plan creation signals: QUESTION (with JSON payload) and PLAN_READY
 - Streaming output with timestamps
@@ -70,6 +71,7 @@ docs/plans/         # plan files location
 - `--base-ref` flag overrides default branch for review diffs (branch name or commit hash)
 - `--skip-finalize` flag disables finalize step for a single run
 - `--wait` flag enables rate limit retry with specified duration (e.g., `--wait 1h`)
+- `--session-timeout` flag sets per-session timeout for claude (e.g., `--session-timeout 30m`), kills hanging sessions
 - `--review-patience` flag terminates external review after N unchanged rounds (stalemate detection)
 - Manual break via SIGQUIT (Ctrl+\) during external review loop terminates it early via injected channel
 - Custom external review support via scripts (wraps any AI tool)
@@ -112,6 +114,7 @@ Allows using custom scripts instead of codex for external code review:
 - `--external-only` (-e) flag runs only external review; `--codex-only` (-c) is deprecated alias
 - `max_external_iterations` config / `--max-external-iterations` CLI flag overrides external review loop limit (0 = auto, derived as `max(3, max_iterations/5)`)
 - `review_patience` config / `--review-patience` CLI flag enables stalemate detection: tracks consecutive rounds with no commits, terminates early when threshold reached (0 = disabled)
+- `session_timeout` config / `--session-timeout` CLI flag sets per-session timeout for claude (e.g., `30m`, `1h`). When a claude session exceeds the timeout, it is killed and the phase loop continues to the next iteration. Applied in `runWithLimitRetry` via `context.WithTimeout`. Claude-only; codex and custom executors are not affected. Disabled by default (empty/0)
 - Manual break: pressing Ctrl+\ (SIGQUIT) during external review terminates the loop immediately via context cancellation. Break channel injected from `cmd/ralphex/` into Runner via `SetBreakCh()`. Not available on Windows
 - `codex_enabled = false` backward compat: treated as `external_review_tool = none`
 
@@ -150,6 +153,22 @@ Key functions in `scripts/ralphex-dk.sh`:
 - `validate_bedrock_config()` - validates bedrock configuration and returns warnings
 
 Documentation: `docs/bedrock-setup.md`
+
+### Docker Socket Support (Docker Wrapper Only)
+
+The `--docker` flag (or `RALPHEX_DOCKER_SOCKET=1` env var) mounts the host Docker socket into the container, enabling testcontainers and Docker-dependent workflows.
+
+- Config: `--docker` CLI flag or `RALPHEX_DOCKER_SOCKET=1` env var (truthy: "1", "true", "yes")
+- Socket path: resolved from `DOCKER_HOST` env var (unix:// scheme) or defaults to `/var/run/docker.sock`
+- Socket mount: without SELinux `:z`/`:Z` suffixes
+- GID detection: `os.stat()` on socket, passed via `DOCKER_GID` env var for baseimage group setup
+- Linux warning: emits security warning to stderr (macOS has VM isolation, no warning)
+- Missing socket: exits with error (fail-fast, no silent degradation)
+
+Key functions in `scripts/ralphex-dk.sh`:
+- `is_docker_enabled()` - checks CLI flag and `RALPHEX_DOCKER_SOCKET` env var
+- `resolve_docker_socket()` - resolves socket path from `DOCKER_HOST` or default
+- `get_docker_socket_gid()` - detects socket file GID via `os.stat()`
 
 ### Git Package API
 
@@ -213,6 +232,7 @@ Key files:
 - **Windows:** builds and runs, but with limitations:
   - Process group signals not available (graceful shutdown kills direct process only, not child processes)
   - File locking not available (active session detection disabled)
+  - Prompts are passed to the claude CLI via stdin (not `-p` flag) to avoid the cmd.exe 8191-character command-line limit
   - `.cmd`/`.bat` wrapper: npm-installed CLIs (e.g., `claude.cmd`, `codex.cmd`) are automatically wrapped with `cmd /C` via `command.Factory` — no manual configuration needed
 
 ### Cross-Platform Development
@@ -248,6 +268,7 @@ GOOS=windows GOARCH=amd64 go build ./...
 - Notification config: `notify_channels`, `notify_on_error`, `notify_on_complete`, `notify_timeout_ms`, plus channel-specific `notify_*` fields (see `docs/notifications.md`)
 - `review_patience` config option: terminate external review after N consecutive unchanged rounds (0 = disabled). CLI flag `--review-patience` takes precedence
 - `wait_on_limit` config option: duration to wait before retrying on rate limit (e.g., "1h", "30m"). CLI flag `--wait` takes precedence. Disabled by default
+- `session_timeout` config option: per-session timeout for claude (e.g., "30m", "1h"). Kills hanging sessions and continues to next iteration. CLI flag `--session-timeout` takes precedence. Disabled by default
 
 ### Local Project Config (.ralphex/)
 
