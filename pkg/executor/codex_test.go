@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -487,16 +488,20 @@ func TestExecCodexRunner_Run_Stdin(t *testing.T) {
 	// test that stdin is piped to the child process (prompt via stdin for Windows compat)
 	prompt := "hello from stdin"
 	runner := &execCodexRunner{stdin: strings.NewReader(prompt)}
+	cmd := "cat"
+	if runtime.GOOS == "windows" {
+		cmd = "more"
+	}
 
 	// use cat which reads stdin and writes to stdout
-	streams, wait, err := runner.Run(context.Background(), "cat")
+	streams, wait, err := runner.Run(context.Background(), cmd)
 
 	require.NoError(t, err)
 	require.NotNil(t, streams.Stdout)
 
 	data, readErr := io.ReadAll(streams.Stdout)
 	require.NoError(t, readErr)
-	assert.Equal(t, prompt, string(data))
+	assert.Contains(t, string(data), prompt)
 
 	err = wait()
 	require.NoError(t, err)

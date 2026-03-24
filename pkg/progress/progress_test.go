@@ -62,7 +62,7 @@ func TestNewLogger(t *testing.T) {
 			defer l.Close()
 
 			assert.Equal(t, tc.wantBase, filepath.Base(l.Path()))
-			assert.Contains(t, filepath.ToSlash(l.Path()), tc.wantDir)
+			assert.Contains(t, filepath.ToSlash(l.Path()), filepath.ToSlash(tc.wantDir))
 
 			// verify header written
 			content, err := os.ReadFile(l.Path())
@@ -1129,7 +1129,7 @@ func TestLogger_PlanModeFilename(t *testing.T) {
 			defer l.Close()
 
 			assert.Equal(t, tc.wantBase, filepath.Base(l.Path()))
-			assert.Contains(t, filepath.ToSlash(l.Path()), filepath.Join(".ralphex", "progress"))
+			assert.Contains(t, filepath.ToSlash(l.Path()), filepath.ToSlash(filepath.Join(".ralphex", "progress")))
 
 			content, err := os.ReadFile(l.Path())
 			require.NoError(t, err)
