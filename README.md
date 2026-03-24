@@ -327,6 +327,7 @@ Then use `ralphex` as usual - it runs in a container with Claude Code and Codex 
 - `RALPHEX_EXTRA_VOLUMES` - Extra volume mounts, comma-separated (e.g., `/data:/mnt/data:ro,/models:/mnt/models`). Entries without `:` are silently skipped
 - `RALPHEX_EXTRA_ENV` - Extra environment variables, comma-separated (e.g., `DEBUG=1,API_KEY`). Format: `VAR=value` or `VAR` (inherit from host). Security warning emitted for sensitive names (KEY, SECRET, TOKEN, etc.) with explicit values - use name-only form for secure credential passing
 - `RALPHEX_DOCKER_SOCKET` - Enable Docker socket mount: `1`, `true`, or `yes` (Docker wrapper only). CLI flag: `--docker`
+- `RALPHEX_DOCKER_NETWORK` - Docker network mode (e.g., `host`, `my-network`). Useful for reaching docker-compose services. CLI flag: `--network`
 - `TZ` - Override container timezone (default: auto-detected from host via `/etc/localtime`). Example: `TZ=Europe/Berlin ralphex docs/plans/feature.md`
 - `RALPHEX_CLAUDE_PROVIDER` - Claude provider mode: `default` or `bedrock` (Docker wrapper only)
 
@@ -709,7 +710,7 @@ Note: Inline comments are not supported (`text # comment` keeps the entire line)
 
 **Examples:**
 - Add a security-focused agent for fintech projects
-- Remove `simplification` agent if over-engineering isn't a concern
+- Remove `{{agent:simplification}}` from prompt files if over-engineering isn't a concern
 - Create language-specific agents (Python linting, TypeScript types)
 - Modify prompts to change how many agents run per phase
 
@@ -778,7 +779,7 @@ Use `--config-dir` or `RALPHEX_CONFIG_DIR` to override the global config locatio
 **Merge behavior:**
 - **Config file**: per-field override (local values override global, missing fields fall back)
 - **Prompts**: per-file fallback (local → global → embedded for each prompt file)
-- **Agents**: replace entirely (if local `agents/` has `.txt` files, use ONLY local agents)
+- **Agents**: per-file fallback (local → global → embedded for each agent file, same as prompts)
 
 ### Configuration options
 
@@ -803,6 +804,7 @@ Use `--config-dir` or `RALPHEX_CONFIG_DIR` to override the global config locatio
 | `plans_dir` | Plans directory | `docs/plans` |
 | `default_branch` | Override auto-detected default branch for review diffs | auto-detect |
 | `vcs_command` | VCS command for the git backend (set to a translation script for hg repos) | `git` |
+| `commit_trailer` | Trailer line appended to all ralphex-orchestrated git commits | disabled |
 | `color_task` | Task execution phase color (hex) | `#00ff00` |
 | `color_review` | Review phase color (hex) | `#00ffff` |
 | `color_codex` | Codex review color (hex) | `#ff00ff` |
@@ -990,7 +992,7 @@ Run `ralphex --reset` to interactively reset global config. Select which compone
 
 **How does local .ralphex/ config interact with global config?**
 
-Priority: CLI flags > local `.ralphex/config` > global `~/.config/ralphex/config` > embedded defaults. Each local setting overrides the corresponding global one—no need to duplicate the entire file. For agents: if local `agents/` has any `.txt` files, it replaces global agents entirely.
+Priority: CLI flags > local `.ralphex/config` > global `~/.config/ralphex/config` > embedded defaults. Each local setting overrides the corresponding global one—no need to duplicate the entire file. For agents: per-file fallback (local → global → embedded), same as prompts. Override one agent without copying all others.
 
 **What happens to uncommitted changes if ralphex fails?**
 

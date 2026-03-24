@@ -11,6 +11,19 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// embeddedAgentNames are the 5 default agents shipped in defaults/agents/
+var embeddedAgentNames = []string{"documentation", "implementation", "quality", "simplification", "testing"}
+
+// findAgent returns agent by name from the list, or nil if not found.
+func findAgent(agents []CustomAgent, name string) *CustomAgent {
+	for i := range agents {
+		if agents[i].Name == name {
+			return &agents[i]
+		}
+	}
+	return nil
+}
+
 func Test_newAgentLoader(t *testing.T) {
 	loader := newAgentLoader(defaultsFS)
 	assert.NotNil(t, loader)
@@ -28,11 +41,21 @@ func TestAgentLoader_Load_FromAgentsDir(t *testing.T) {
 	agents, err := loader.Load("", agentsDir)
 	require.NoError(t, err)
 
-	assert.Len(t, agents, 2)
-	assert.Equal(t, "performance", agents[0].Name)
-	assert.Equal(t, "check for performance issues", agents[0].Prompt)
-	assert.Equal(t, "security", agents[1].Name)
-	assert.Equal(t, "check for security issues", agents[1].Prompt)
+	// custom agents + 5 embedded defaults = 7 total
+	assert.Len(t, agents, 7)
+
+	perf := findAgent(agents, "performance")
+	require.NotNil(t, perf)
+	assert.Equal(t, "check for performance issues", perf.Prompt)
+
+	sec := findAgent(agents, "security")
+	require.NotNil(t, sec)
+	assert.Equal(t, "check for security issues", sec.Prompt)
+
+	// embedded defaults are present
+	for _, name := range embeddedAgentNames {
+		assert.NotNil(t, findAgent(agents, name), "embedded agent %s should be present", name)
+	}
 }
 
 func TestAgentLoader_Load_NoAgentsDir_FallsBackToEmbedded(t *testing.T) {
@@ -44,13 +67,8 @@ func TestAgentLoader_Load_NoAgentsDir_FallsBackToEmbedded(t *testing.T) {
 	require.NoError(t, err)
 	// when agents directory doesn't exist, should fall back to embedded agents
 	assert.NotEmpty(t, agents, "should load embedded agents when directory doesn't exist")
-	// verify we got the expected embedded agents
-	names := make([]string, 0, len(agents))
-	for _, a := range agents {
-		names = append(names, a.Name)
-	}
-	assert.Contains(t, names, "quality", "should include quality agent from embedded")
-	assert.Contains(t, names, "implementation", "should include implementation agent from embedded")
+	assert.NotNil(t, findAgent(agents, "quality"), "should include quality agent from embedded")
+	assert.NotNil(t, findAgent(agents, "implementation"), "should include implementation agent from embedded")
 }
 
 func TestAgentLoader_Load_EmptyAgentsDir(t *testing.T) {
@@ -61,7 +79,11 @@ func TestAgentLoader_Load_EmptyAgentsDir(t *testing.T) {
 	loader := newAgentLoader(defaultsFS)
 	agents, err := loader.Load("", agentsDir)
 	require.NoError(t, err)
-	assert.Empty(t, agents)
+	// empty dir returns embedded defaults (per-file fallback behavior)
+	assert.Len(t, agents, 5, "empty dir should return all 5 embedded defaults")
+	for _, name := range embeddedAgentNames {
+		assert.NotNil(t, findAgent(agents, name), "embedded agent %s should be present", name)
+	}
 }
 
 func TestAgentLoader_Load_OnlyTxtFiles(t *testing.T) {
@@ -77,9 +99,11 @@ func TestAgentLoader_Load_OnlyTxtFiles(t *testing.T) {
 	agents, err := loader.Load("", agentsDir)
 	require.NoError(t, err)
 
-	assert.Len(t, agents, 1)
-	assert.Equal(t, "valid", agents[0].Name)
-	assert.Equal(t, "valid agent", agents[0].Prompt)
+	// valid.txt + 5 embedded = 6
+	assert.Len(t, agents, 6)
+	v := findAgent(agents, "valid")
+	require.NotNil(t, v)
+	assert.Equal(t, "valid agent", v.Prompt)
 }
 
 func TestAgentLoader_Load_SkipsEmptyFiles(t *testing.T) {
@@ -95,8 +119,13 @@ func TestAgentLoader_Load_SkipsEmptyFiles(t *testing.T) {
 	agents, err := loader.Load("", agentsDir)
 	require.NoError(t, err)
 
-	assert.Len(t, agents, 1)
-	assert.Equal(t, "valid", agents[0].Name)
+	// valid.txt + 5 embedded = 6 (empty/whitespace custom agents skipped, no embedded match)
+	assert.Len(t, agents, 6)
+	v := findAgent(agents, "valid")
+	require.NotNil(t, v)
+	assert.Equal(t, "valid agent", v.Prompt)
+	assert.Nil(t, findAgent(agents, "empty"), "empty custom agent should be skipped")
+	assert.Nil(t, findAgent(agents, "whitespace"), "whitespace-only custom agent should be skipped")
 }
 
 func TestAgentLoader_Load_TrimsWhitespace(t *testing.T) {
@@ -110,8 +139,9 @@ func TestAgentLoader_Load_TrimsWhitespace(t *testing.T) {
 	agents, err := loader.Load("", agentsDir)
 	require.NoError(t, err)
 
-	assert.Len(t, agents, 1)
-	assert.Equal(t, "prompt with spaces", agents[0].Prompt)
+	a := findAgent(agents, "agent")
+	require.NotNil(t, a)
+	assert.Equal(t, "prompt with spaces", a.Prompt)
 }
 
 func TestAgentLoader_Load_SkipsDirectories(t *testing.T) {
@@ -126,8 +156,11 @@ func TestAgentLoader_Load_SkipsDirectories(t *testing.T) {
 	agents, err := loader.Load("", agentsDir)
 	require.NoError(t, err)
 
-	assert.Len(t, agents, 1)
-	assert.Equal(t, "valid", agents[0].Name)
+	// valid.txt + 5 embedded = 6 (subdir skipped)
+	assert.Len(t, agents, 6)
+	v := findAgent(agents, "valid")
+	require.NotNil(t, v)
+	assert.Equal(t, "valid agent", v.Prompt)
 }
 
 func TestAgentLoader_Load_PreservesMultilinePrompt(t *testing.T) {
@@ -142,8 +175,9 @@ func TestAgentLoader_Load_PreservesMultilinePrompt(t *testing.T) {
 	agents, err := loader.Load("", agentsDir)
 	require.NoError(t, err)
 
-	assert.Len(t, agents, 1)
-	assert.Equal(t, prompt, agents[0].Prompt)
+	m := findAgent(agents, "multi")
+	require.NotNil(t, m)
+	assert.Equal(t, prompt, m.Prompt)
 }
 
 func TestAgentLoader_Load_PreservesAllContent(t *testing.T) {
@@ -158,10 +192,9 @@ func TestAgentLoader_Load_PreservesAllContent(t *testing.T) {
 	agents, err := loader.Load("", agentsDir)
 	require.NoError(t, err)
 
-	require.Len(t, agents, 1)
-	assert.Equal(t, "security", agents[0].Name)
-	assert.Equal(t, "# security agent - checks for vulnerabilities\ncheck for SQL injection\ncheck for XSS\n# end of agent",
-		agents[0].Prompt)
+	sec := findAgent(agents, "security")
+	require.NotNil(t, sec)
+	assert.Equal(t, "# security agent - checks for vulnerabilities\ncheck for SQL injection\ncheck for XSS\n# end of agent", sec.Prompt)
 }
 
 func TestAgentLoader_Load_HandlesCRLFLineEndings(t *testing.T) {
@@ -177,11 +210,12 @@ func TestAgentLoader_Load_HandlesCRLFLineEndings(t *testing.T) {
 	agents, err := loader.Load("", agentsDir)
 	require.NoError(t, err)
 
-	require.Len(t, agents, 1)
-	assert.Equal(t, "# comment line\ncheck for issues\n# another comment\nalso check this", agents[0].Prompt)
+	sec := findAgent(agents, "security")
+	require.NotNil(t, sec)
+	assert.Equal(t, "# comment line\ncheck for issues\n# another comment\nalso check this", sec.Prompt)
 }
 
-func TestAgentLoader_Load_LocalAgentsReplaceGlobal(t *testing.T) {
+func TestAgentLoader_Load_LocalOverridesGlobalPerFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	globalDir := filepath.Join(tmpDir, "global", "agents")
 	localDir := filepath.Join(tmpDir, "local", "agents")
@@ -192,17 +226,27 @@ func TestAgentLoader_Load_LocalAgentsReplaceGlobal(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(globalDir, "security.txt"), []byte("global security"), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(globalDir, "performance.txt"), []byte("global performance"), 0o600))
 
-	// local agents (completely different set)
+	// local agent: custom.txt (new) — does NOT replace global set
 	require.NoError(t, os.WriteFile(filepath.Join(localDir, "custom.txt"), []byte("local custom agent"), 0o600))
 
 	loader := newAgentLoader(defaultsFS)
 	agents, err := loader.Load(localDir, globalDir)
 	require.NoError(t, err)
 
-	// only local agents should be used (replace behavior)
-	assert.Len(t, agents, 1)
-	assert.Equal(t, "custom", agents[0].Name)
-	assert.Equal(t, "local custom agent", agents[0].Prompt)
+	// per-file merge: custom (local) + security (global) + performance (global) + 5 embedded = 8
+	assert.Len(t, agents, 8)
+
+	custom := findAgent(agents, "custom")
+	require.NotNil(t, custom)
+	assert.Equal(t, "local custom agent", custom.Prompt)
+
+	sec := findAgent(agents, "security")
+	require.NotNil(t, sec)
+	assert.Equal(t, "global security", sec.Prompt)
+
+	perf := findAgent(agents, "performance")
+	require.NotNil(t, perf)
+	assert.Equal(t, "global performance", perf.Prompt)
 }
 
 func TestAgentLoader_Load_LocalAgentsEmptyFallsBackToGlobal(t *testing.T) {
@@ -220,10 +264,16 @@ func TestAgentLoader_Load_LocalAgentsEmptyFallsBackToGlobal(t *testing.T) {
 	agents, err := loader.Load(localDir, globalDir)
 	require.NoError(t, err)
 
-	// global agents should be used since local agents dir is empty
-	assert.Len(t, agents, 2)
-	assert.Equal(t, "performance", agents[0].Name)
-	assert.Equal(t, "security", agents[1].Name)
+	// global agents + 5 embedded = 7
+	assert.Len(t, agents, 7)
+
+	perf := findAgent(agents, "performance")
+	require.NotNil(t, perf)
+	assert.Equal(t, "global performance", perf.Prompt)
+
+	sec := findAgent(agents, "security")
+	require.NotNil(t, sec)
+	assert.Equal(t, "global security", sec.Prompt)
 }
 
 func TestAgentLoader_Load_NoLocalAgentsDirFallsBackToGlobal(t *testing.T) {
@@ -239,9 +289,11 @@ func TestAgentLoader_Load_NoLocalAgentsDirFallsBackToGlobal(t *testing.T) {
 	agents, err := loader.Load(localDir, globalDir)
 	require.NoError(t, err)
 
-	// global agents should be used since no local agents dir
-	assert.Len(t, agents, 1)
-	assert.Equal(t, "security", agents[0].Name)
+	// security (global) + 5 embedded = 6
+	assert.Len(t, agents, 6)
+	sec := findAgent(agents, "security")
+	require.NotNil(t, sec)
+	assert.Equal(t, "global security", sec.Prompt)
 }
 
 func TestAgentLoader_Load_LocalAgentsMultipleFiles(t *testing.T) {
@@ -251,7 +303,7 @@ func TestAgentLoader_Load_LocalAgentsMultipleFiles(t *testing.T) {
 	require.NoError(t, os.MkdirAll(globalDir, 0o700))
 	require.NoError(t, os.MkdirAll(localDir, 0o700))
 
-	// global agents (should be ignored)
+	// global agent
 	require.NoError(t, os.WriteFile(filepath.Join(globalDir, "global.txt"), []byte("global agent"), 0o600))
 
 	// multiple local agents
@@ -263,59 +315,134 @@ func TestAgentLoader_Load_LocalAgentsMultipleFiles(t *testing.T) {
 	agents, err := loader.Load(localDir, globalDir)
 	require.NoError(t, err)
 
-	// only local agents should be used (sorted alphabetically)
-	assert.Len(t, agents, 3)
-	assert.Equal(t, "alpha", agents[0].Name)
-	assert.Equal(t, "beta", agents[1].Name)
-	assert.Equal(t, "gamma", agents[2].Name)
+	// alpha, beta, gamma (local) + global (global) + 5 embedded = 9
+	assert.Len(t, agents, 9)
+
+	alpha := findAgent(agents, "alpha")
+	require.NotNil(t, alpha)
+	assert.Equal(t, "alpha agent", alpha.Prompt)
+
+	beta := findAgent(agents, "beta")
+	require.NotNil(t, beta)
+	assert.Equal(t, "beta agent", beta.Prompt)
+
+	gamma := findAgent(agents, "gamma")
+	require.NotNil(t, gamma)
+	assert.Equal(t, "gamma agent", gamma.Prompt)
+
+	gl := findAgent(agents, "global")
+	require.NotNil(t, gl)
+	assert.Equal(t, "global agent", gl.Prompt)
 }
 
-func TestAgentLoader_dirHasAgentFiles(t *testing.T) {
+func TestAgentLoader_collectDirFilenames(t *testing.T) {
 	tmpDir := t.TempDir()
 	agentsDir := filepath.Join(tmpDir, "agents")
 	al := newAgentLoader(defaultsFS)
 
-	// non-existent dir
-	has, err := al.dirHasAgentFiles(filepath.Join(tmpDir, "nonexistent"))
+	// non-existent dir returns nil, no error
+	names, err := al.collectDirFilenames(filepath.Join(tmpDir, "nonexistent"))
 	require.NoError(t, err)
-	assert.False(t, has)
+	assert.Nil(t, names)
 
-	// empty dir
+	// empty dir returns nil
 	require.NoError(t, os.MkdirAll(agentsDir, 0o700))
-	has, err = al.dirHasAgentFiles(agentsDir)
+	names, err = al.collectDirFilenames(agentsDir)
 	require.NoError(t, err)
-	assert.False(t, has)
+	assert.Nil(t, names)
 
 	// dir with non-.txt files only
 	require.NoError(t, os.WriteFile(filepath.Join(agentsDir, "readme.md"), []byte("readme"), 0o600))
-	has, err = al.dirHasAgentFiles(agentsDir)
+	names, err = al.collectDirFilenames(agentsDir)
 	require.NoError(t, err)
-	assert.False(t, has)
+	assert.Nil(t, names)
 
-	// dir with .txt file
+	// dir with .txt files
 	require.NoError(t, os.WriteFile(filepath.Join(agentsDir, "agent.txt"), []byte("agent"), 0o600))
-	has, err = al.dirHasAgentFiles(agentsDir)
+	require.NoError(t, os.MkdirAll(filepath.Join(agentsDir, "subdir.txt"), 0o700)) // subdir skipped
+	names, err = al.collectDirFilenames(agentsDir)
 	require.NoError(t, err)
-	assert.True(t, has)
+	assert.Equal(t, []string{"agent.txt"}, names)
+
+	// empty string dir returns nil, no error
+	names, err = al.collectDirFilenames("")
+	require.NoError(t, err)
+	assert.Nil(t, names)
 }
 
-func TestAgentLoader_loadFromDir(t *testing.T) {
-	tmpDir := t.TempDir()
-	agentsDir := filepath.Join(tmpDir, "agents")
-	require.NoError(t, os.MkdirAll(agentsDir, 0o700))
+func TestAgentLoader_collectEmbeddedFilenames(t *testing.T) {
+	al := newAgentLoader(defaultsFS)
+	names, err := al.collectEmbeddedFilenames()
+	require.NoError(t, err)
+	assert.Len(t, names, 5)
+	assert.Contains(t, names, "documentation.txt")
+	assert.Contains(t, names, "implementation.txt")
+	assert.Contains(t, names, "quality.txt")
+	assert.Contains(t, names, "simplification.txt")
+	assert.Contains(t, names, "testing.txt")
+}
 
-	require.NoError(t, os.WriteFile(filepath.Join(agentsDir, "alpha.txt"), []byte("alpha prompt"), 0o600))
-	require.NoError(t, os.WriteFile(filepath.Join(agentsDir, "beta.txt"), []byte("beta prompt"), 0o600))
+func TestAgentLoader_loadAgentWithFallback_LocalFirst(t *testing.T) {
+	tmpDir := t.TempDir()
+	globalDir := filepath.Join(tmpDir, "global")
+	localDir := filepath.Join(tmpDir, "local")
+	require.NoError(t, os.MkdirAll(globalDir, 0o700))
+	require.NoError(t, os.MkdirAll(localDir, 0o700))
+
+	require.NoError(t, os.WriteFile(filepath.Join(globalDir, "agent.txt"), []byte("global version"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(localDir, "agent.txt"), []byte("local version"), 0o600))
 
 	al := newAgentLoader(defaultsFS)
-	agents, err := al.loadFromDir(agentsDir)
+	result, err := al.loadAgentWithFallback(localDir, globalDir, "agent.txt")
 	require.NoError(t, err)
+	assert.Equal(t, "local version", result)
+}
 
-	assert.Len(t, agents, 2)
-	assert.Equal(t, "alpha", agents[0].Name)
-	assert.Equal(t, "alpha prompt", agents[0].Prompt)
-	assert.Equal(t, "beta", agents[1].Name)
-	assert.Equal(t, "beta prompt", agents[1].Prompt)
+func TestAgentLoader_loadAgentWithFallback_FallsToGlobal(t *testing.T) {
+	tmpDir := t.TempDir()
+	globalDir := filepath.Join(tmpDir, "global")
+	localDir := filepath.Join(tmpDir, "local")
+	require.NoError(t, os.MkdirAll(globalDir, 0o700))
+	require.NoError(t, os.MkdirAll(localDir, 0o700))
+
+	require.NoError(t, os.WriteFile(filepath.Join(globalDir, "agent.txt"), []byte("global version"), 0o600))
+	// no local file
+
+	al := newAgentLoader(defaultsFS)
+	result, err := al.loadAgentWithFallback(localDir, globalDir, "agent.txt")
+	require.NoError(t, err)
+	assert.Equal(t, "global version", result)
+}
+
+func TestAgentLoader_loadAgentWithFallback_FallsToEmbedded(t *testing.T) {
+	tmpDir := t.TempDir()
+	globalDir := filepath.Join(tmpDir, "global")
+	localDir := filepath.Join(tmpDir, "local")
+	require.NoError(t, os.MkdirAll(globalDir, 0o700))
+	require.NoError(t, os.MkdirAll(localDir, 0o700))
+
+	// no local or global file for quality.txt — should fall back to embedded
+	al := newAgentLoader(defaultsFS)
+	result, err := al.loadAgentWithFallback(localDir, globalDir, "quality.txt")
+	require.NoError(t, err)
+	assert.Contains(t, result, "security", "should get embedded quality agent content")
+}
+
+func TestAgentLoader_loadAgentWithFallback_CustomNotInEmbedded(t *testing.T) {
+	tmpDir := t.TempDir()
+	al := newAgentLoader(defaultsFS)
+
+	// filename that doesn't exist anywhere — returns empty
+	result, err := al.loadAgentWithFallback("", "", "nonexistent.txt")
+	require.NoError(t, err)
+	assert.Empty(t, result)
+
+	// same with dirs that don't have the file
+	globalDir := filepath.Join(tmpDir, "global")
+	require.NoError(t, os.MkdirAll(globalDir, 0o700))
+	result, err = al.loadAgentWithFallback("", globalDir, "nonexistent.txt")
+	require.NoError(t, err)
+	assert.Empty(t, result)
 }
 
 func TestAgentLoader_loadFileWithFallback_PreservesAllContent(t *testing.T) {
@@ -344,38 +471,6 @@ func TestAgentLoader_loadFileWithFallback_FallsBackToEmbedded(t *testing.T) {
 	assert.Contains(t, result, "security")
 }
 
-func TestAgentLoader_dirHasAgentFiles_PermissionDenied(t *testing.T) {
-	skipIfNoChmod(t)
-	tmpDir := t.TempDir()
-	agentsDir := filepath.Join(tmpDir, "agents")
-	require.NoError(t, os.MkdirAll(agentsDir, 0o700))
-
-	// remove read permission
-	require.NoError(t, os.Chmod(agentsDir, 0o000))
-	t.Cleanup(func() { _ = os.Chmod(agentsDir, 0o700) }) //nolint:gosec // test cleanup
-
-	al := newAgentLoader(defaultsFS)
-	_, err := al.dirHasAgentFiles(agentsDir)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "read agents directory")
-}
-
-func TestAgentLoader_loadFromDir_PermissionDenied(t *testing.T) {
-	skipIfNoChmod(t)
-	tmpDir := t.TempDir()
-	agentsDir := filepath.Join(tmpDir, "agents")
-	require.NoError(t, os.MkdirAll(agentsDir, 0o700))
-
-	// remove read permission
-	require.NoError(t, os.Chmod(agentsDir, 0o000))
-	t.Cleanup(func() { _ = os.Chmod(agentsDir, 0o700) }) //nolint:gosec // test cleanup
-
-	al := newAgentLoader(defaultsFS)
-	_, err := al.loadFromDir(agentsDir)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "read agents directory")
-}
-
 func TestAgentLoader_loadFileWithFallback_PermissionDenied(t *testing.T) {
 	skipIfNoChmod(t)
 	tmpDir := t.TempDir()
@@ -390,49 +485,6 @@ func TestAgentLoader_loadFileWithFallback_PermissionDenied(t *testing.T) {
 	_, err := al.loadFileWithFallback(agentFile, "agent.txt")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "read agent file")
-}
-
-func TestAgentLoader_loadAllFromEmbedFS(t *testing.T) {
-	al := newAgentLoader(defaultsFS)
-	agents, err := al.loadAllFromEmbedFS()
-	require.NoError(t, err)
-
-	// should load all embedded agents
-	assert.NotEmpty(t, agents, "should have embedded agents")
-	assert.GreaterOrEqual(t, len(agents), 5, "should have at least 5 embedded agents")
-
-	// verify agents are sorted
-	for i := 1; i < len(agents); i++ {
-		assert.Less(t, agents[i-1].Name, agents[i].Name, "agents should be sorted alphabetically")
-	}
-
-	// verify known embedded agents are present
-	names := make([]string, 0, len(agents))
-	for _, a := range agents {
-		names = append(names, a.Name)
-	}
-	assert.Contains(t, names, "documentation")
-	assert.Contains(t, names, "implementation")
-	assert.Contains(t, names, "quality")
-	assert.Contains(t, names, "simplification")
-	assert.Contains(t, names, "testing")
-}
-
-func TestAgentLoader_loadFromDir_NonexistentFallsBackToEmbedded(t *testing.T) {
-	tmpDir := t.TempDir()
-	nonexistentDir := filepath.Join(tmpDir, "nonexistent", "agents")
-
-	al := newAgentLoader(defaultsFS)
-	agents, err := al.loadFromDir(nonexistentDir)
-	require.NoError(t, err)
-
-	// should fall back to embedded agents
-	assert.NotEmpty(t, agents, "should load embedded agents when directory doesn't exist")
-	names := make([]string, 0, len(agents))
-	for _, a := range agents {
-		names = append(names, a.Name)
-	}
-	assert.Contains(t, names, "quality", "should include quality agent from embedded")
 }
 
 func TestAgentLoader_Load_WarnsOnInvalidModel(t *testing.T) {
@@ -455,9 +507,10 @@ func TestAgentLoader_Load_WarnsOnInvalidModel(t *testing.T) {
 
 	output := buf.String()
 
-	require.Len(t, agents, 1)
-	assert.Empty(t, agents[0].Model, "invalid model should be dropped")
-	assert.Equal(t, "Review code.", agents[0].Prompt)
+	bad := findAgent(agents, "bad")
+	require.NotNil(t, bad)
+	assert.Empty(t, bad.Model, "invalid model should be dropped")
+	assert.Equal(t, "Review code.", bad.Prompt)
 	assert.Contains(t, output, `[WARN] agent bad: unknown model "gpt-5"`)
 }
 
@@ -473,11 +526,12 @@ func TestAgentLoader_Load_FrontmatterOnlyFallsBackToEmbedded(t *testing.T) {
 	loader := newAgentLoader(defaultsFS)
 	agents, err := loader.Load("", agentsDir)
 	require.NoError(t, err)
-	require.Len(t, agents, 1)
-	assert.Equal(t, "quality", agents[0].Name)
-	assert.Contains(t, agents[0].Prompt, "security", "should use embedded quality body")
-	assert.Empty(t, agents[0].Model, "frontmatter options should be dropped")
-	assert.Empty(t, agents[0].AgentType, "frontmatter options should be dropped")
+
+	q := findAgent(agents, "quality")
+	require.NotNil(t, q)
+	assert.Contains(t, q.Prompt, "security", "should use embedded quality body")
+	assert.Empty(t, q.Model, "frontmatter options should be dropped")
+	assert.Empty(t, q.AgentType, "frontmatter options should be dropped")
 }
 
 func TestAgentLoader_Load_FrontmatterAndCommentsOnlyFallsBackToEmbedded(t *testing.T) {
@@ -492,10 +546,11 @@ func TestAgentLoader_Load_FrontmatterAndCommentsOnlyFallsBackToEmbedded(t *testi
 	loader := newAgentLoader(defaultsFS)
 	agents, err := loader.Load("", agentsDir)
 	require.NoError(t, err)
-	require.Len(t, agents, 1)
-	assert.Equal(t, "quality", agents[0].Name)
-	assert.Contains(t, agents[0].Prompt, "security", "should use embedded quality body")
-	assert.Empty(t, agents[0].Model, "frontmatter options should be dropped")
+
+	q := findAgent(agents, "quality")
+	require.NotNil(t, q)
+	assert.Contains(t, q.Prompt, "security", "should use embedded quality body")
+	assert.Empty(t, q.Model, "frontmatter options should be dropped")
 }
 
 func TestAgentLoader_Load_ParsesOptions(t *testing.T) {
@@ -509,11 +564,12 @@ func TestAgentLoader_Load_ParsesOptions(t *testing.T) {
 	loader := newAgentLoader(defaultsFS)
 	agents, err := loader.Load("", agentsDir)
 	require.NoError(t, err)
-	require.Len(t, agents, 1)
-	assert.Equal(t, "quality", agents[0].Name)
-	assert.Equal(t, "Review code for issues.", agents[0].Prompt)
-	assert.Equal(t, "haiku", agents[0].Model)
-	assert.Equal(t, "code-reviewer", agents[0].AgentType)
+
+	q := findAgent(agents, "quality")
+	require.NotNil(t, q)
+	assert.Equal(t, "Review code for issues.", q.Prompt)
+	assert.Equal(t, "haiku", q.Model)
+	assert.Equal(t, "code-reviewer", q.AgentType)
 }
 
 func TestAgentLoader_Load_ParsesOptionsWithSingleLeadingComment(t *testing.T) {
@@ -528,11 +584,12 @@ func TestAgentLoader_Load_ParsesOptionsWithSingleLeadingComment(t *testing.T) {
 	loader := newAgentLoader(defaultsFS)
 	agents, err := loader.Load("", agentsDir)
 	require.NoError(t, err)
-	require.Len(t, agents, 1)
-	assert.Equal(t, "quality", agents[0].Name)
-	assert.Equal(t, "Review code for issues.", agents[0].Prompt)
-	assert.Equal(t, "haiku", agents[0].Model)
-	assert.Equal(t, "code-reviewer", agents[0].AgentType)
+
+	q := findAgent(agents, "quality")
+	require.NotNil(t, q)
+	assert.Equal(t, "Review code for issues.", q.Prompt)
+	assert.Equal(t, "haiku", q.Model)
+	assert.Equal(t, "code-reviewer", q.AgentType)
 }
 
 func TestAgentLoader_Load_ParsesOptionsWithWhitespaceSeparator(t *testing.T) {
@@ -547,10 +604,11 @@ func TestAgentLoader_Load_ParsesOptionsWithWhitespaceSeparator(t *testing.T) {
 	loader := newAgentLoader(defaultsFS)
 	agents, err := loader.Load("", agentsDir)
 	require.NoError(t, err)
-	require.Len(t, agents, 1)
-	assert.Equal(t, "quality", agents[0].Name)
-	assert.Equal(t, "Review code.", agents[0].Prompt)
-	assert.Equal(t, "sonnet", agents[0].Model)
+
+	q := findAgent(agents, "quality")
+	require.NotNil(t, q)
+	assert.Equal(t, "Review code.", q.Prompt)
+	assert.Equal(t, "sonnet", q.Model)
 }
 
 func TestAgentLoader_Load_ParsesOptionsWithLeadingComments(t *testing.T) {
@@ -565,9 +623,110 @@ func TestAgentLoader_Load_ParsesOptionsWithLeadingComments(t *testing.T) {
 	loader := newAgentLoader(defaultsFS)
 	agents, err := loader.Load("", agentsDir)
 	require.NoError(t, err)
-	require.Len(t, agents, 1)
-	assert.Equal(t, "quality", agents[0].Name)
-	assert.Equal(t, "Review code for issues.", agents[0].Prompt)
-	assert.Equal(t, "haiku", agents[0].Model)
-	assert.Equal(t, "code-reviewer", agents[0].AgentType)
+
+	q := findAgent(agents, "quality")
+	require.NotNil(t, q)
+	assert.Equal(t, "Review code for issues.", q.Prompt)
+	assert.Equal(t, "haiku", q.Model)
+	assert.Equal(t, "code-reviewer", q.AgentType)
+}
+
+func TestAgentLoader_Load_LocalOverridesOneDefault(t *testing.T) {
+	tmpDir := t.TempDir()
+	localDir := filepath.Join(tmpDir, "local", "agents")
+	globalDir := filepath.Join(tmpDir, "global", "agents")
+	require.NoError(t, os.MkdirAll(localDir, 0o700))
+	require.NoError(t, os.MkdirAll(globalDir, 0o700))
+
+	// local overrides only quality.txt, other 4 embedded defaults should come through
+	require.NoError(t, os.WriteFile(filepath.Join(localDir, "quality.txt"), []byte("custom quality check"), 0o600))
+
+	loader := newAgentLoader(defaultsFS)
+	agents, err := loader.Load(localDir, globalDir)
+	require.NoError(t, err)
+
+	// 5 total: 1 local override + 4 other embedded defaults
+	assert.Len(t, agents, 5)
+
+	q := findAgent(agents, "quality")
+	require.NotNil(t, q)
+	assert.Equal(t, "custom quality check", q.Prompt, "local quality should override embedded")
+
+	// other 4 embedded defaults are present
+	for _, name := range []string{"documentation", "implementation", "simplification", "testing"} {
+		assert.NotNil(t, findAgent(agents, name), "embedded agent %s should be present", name)
+	}
+}
+
+func TestAgentLoader_Load_LocalAddsCustomAlongsideDefaults(t *testing.T) {
+	tmpDir := t.TempDir()
+	localDir := filepath.Join(tmpDir, "local", "agents")
+	globalDir := filepath.Join(tmpDir, "global", "agents")
+	require.NoError(t, os.MkdirAll(localDir, 0o700))
+	require.NoError(t, os.MkdirAll(globalDir, 0o700))
+
+	// local adds a custom agent alongside the 5 embedded defaults
+	require.NoError(t, os.WriteFile(filepath.Join(localDir, "security.txt"), []byte("custom security check"), 0o600))
+
+	loader := newAgentLoader(defaultsFS)
+	agents, err := loader.Load(localDir, globalDir)
+	require.NoError(t, err)
+
+	// 6 total: 5 embedded + 1 custom
+	assert.Len(t, agents, 6)
+
+	sec := findAgent(agents, "security")
+	require.NotNil(t, sec)
+	assert.Equal(t, "custom security check", sec.Prompt)
+
+	for _, name := range embeddedAgentNames {
+		assert.NotNil(t, findAgent(agents, name), "embedded agent %s should be present", name)
+	}
+}
+
+func TestAgentLoader_Load_LocalOverridesGlobalSameFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	localDir := filepath.Join(tmpDir, "local", "agents")
+	globalDir := filepath.Join(tmpDir, "global", "agents")
+	require.NoError(t, os.MkdirAll(localDir, 0o700))
+	require.NoError(t, os.MkdirAll(globalDir, 0o700))
+
+	// same filename in both local and global — local wins
+	require.NoError(t, os.WriteFile(filepath.Join(globalDir, "security.txt"), []byte("global security"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(localDir, "security.txt"), []byte("local security"), 0o600))
+
+	// global-only agent should also appear
+	require.NoError(t, os.WriteFile(filepath.Join(globalDir, "performance.txt"), []byte("global performance"), 0o600))
+
+	loader := newAgentLoader(defaultsFS)
+	agents, err := loader.Load(localDir, globalDir)
+	require.NoError(t, err)
+
+	// security (local) + performance (global) + 5 embedded = 7
+	assert.Len(t, agents, 7)
+
+	sec := findAgent(agents, "security")
+	require.NotNil(t, sec)
+	assert.Equal(t, "local security", sec.Prompt, "local should override global for same filename")
+
+	perf := findAgent(agents, "performance")
+	require.NotNil(t, perf)
+	assert.Equal(t, "global performance", perf.Prompt, "global-only agent should be included")
+}
+
+func TestAgentLoader_Load_ResultsSortedAlphabetically(t *testing.T) {
+	tmpDir := t.TempDir()
+	agentsDir := filepath.Join(tmpDir, "agents")
+	require.NoError(t, os.MkdirAll(agentsDir, 0o700))
+
+	require.NoError(t, os.WriteFile(filepath.Join(agentsDir, "zebra.txt"), []byte("z agent"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(agentsDir, "alpha.txt"), []byte("a agent"), 0o600))
+
+	loader := newAgentLoader(defaultsFS)
+	agents, err := loader.Load("", agentsDir)
+	require.NoError(t, err)
+
+	for i := 1; i < len(agents); i++ {
+		assert.Less(t, agents[i-1].Name, agents[i].Name, "agents should be sorted alphabetically")
+	}
 }

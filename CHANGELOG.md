@@ -1,5 +1,33 @@
 # Changelog
 
+## v0.25.0 - 2026-03-23
+
+### New Features
+
+- Add commit_trailer config option for attribution trailers on commits #242 @umputun
+- Per-file fallback for agent loading #239 @umputun
+
+### Fixed
+
+- Use Optional[] syntax in ralphex-dk.sh for Python 3.9 compatibility #241 @alkk
+- Fix Windows command-line length limits problem for codex execution #233 @stanurkov
+
+## v0.24.4 - 2026-03-21
+
+### Fixed
+
+- Fix default colors for light terminal readability #237 @umputun
+
+## v0.24.3 - 2026-03-18
+
+### Improved
+
+- Add RALPHEX_DOCKER_NETWORK env var and --network CLI flag #230 @umputun
+
+### Fixed
+
+- Prevent non-automatable checkboxes in plan Task sections #228 @umputun
+
 ## v0.24.2 - 2026-03-18
 
 ### Fixed

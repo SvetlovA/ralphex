@@ -170,6 +170,14 @@ Key functions in `scripts/ralphex-dk.sh`:
 - `resolve_docker_socket()` - resolves socket path from `DOCKER_HOST` or default
 - `get_docker_socket_gid()` - detects socket file GID via `os.stat()`
 
+### Docker Network Mode (Docker Wrapper Only)
+
+The `--network` flag (or `RALPHEX_DOCKER_NETWORK` env var) sets the Docker network mode for the container, allowing it to reach docker-compose services on localhost.
+
+- Config: `--network MODE` CLI flag or `RALPHEX_DOCKER_NETWORK` env var
+- Passes `--network <value>` to `docker run`
+- Common values: `host` (reach host-exposed ports), named networks (e.g., `my-compose-net`)
+
 ### Git Package API
 
 Single public entry point: `git.NewService(path, logger, vcsCmd...) (*Service, error)`
@@ -265,6 +273,7 @@ GOOS=windows GOARCH=amd64 go build ./...
 - `default_branch` config option: override auto-detected default branch for review diffs
 - `max_iterations` config option: override CLI default (50) for maximum task iterations per plan (CLI flag `--max-iterations` takes precedence)
 - `vcs_command` config option: override the VCS binary used by the git backend (default: `"git"`). Set to a translation script path (e.g., `scripts/hg2git/hg2git.sh`) to use ralphex with Mercurial repos. See `docs/hg-support.md`
+- `commit_trailer` config option: trailer line appended to all ralphex-orchestrated git commits (both Go-code commits and LLM-prompted commits). When set, the trailer is appended after a blank line at the end of every commit message. Example: `commit_trailer = Co-authored-by: ralphex <noreply@ralphex.com>`. Disabled by default (empty)
 - Notification config: `notify_channels`, `notify_on_error`, `notify_on_complete`, `notify_timeout_ms`, plus channel-specific `notify_*` fields (see `docs/notifications.md`)
 - `review_patience` config option: terminate external review after N consecutive unchanged rounds (0 = disabled). CLI flag `--review-patience` takes precedence
 - `wait_on_limit` config option: duration to wait before retrying on rate limit (e.g., "1h", "30m"). CLI flag `--wait` takes precedence. Disabled by default
@@ -280,14 +289,14 @@ project/
 │   ├── config          # overrides specific settings (per-field merge)
 │   ├── prompts/        # per-file fallback: local → global → embedded
 │   │   └── task.txt    # only override task prompt
-│   └── agents/         # replaces global if has files (no merge)
+│   └── agents/         # per-file fallback: local → global → embedded
 │       └── custom.txt  # project-specific agent
 ```
 
 **Merge strategy:**
 - **Config file**: per-field override (local values override global, missing fields fall back)
 - **Prompts**: per-file fallback (local → global → embedded for each prompt file)
-- **Agents**: replace entirely (if local agents/ has .txt files, use ONLY local agents)
+- **Agents**: per-file fallback (local → global → embedded for each agent file, same as prompts)
 
 ### Config Defaults Behavior
 
