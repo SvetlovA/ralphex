@@ -1052,6 +1052,13 @@ func TestExecutePlanRequestHasNotifySvc(t *testing.T) {
 	req.NotifySvc.Send(t.Context(), notify.Result{Status: "success"})
 }
 
+// writeExecutable writes content to path and makes it executable.
+func writeExecutable(t *testing.T, path, content string) {
+	t.Helper()
+	err := os.WriteFile(path, []byte(content), 0o700) //nolint:gosec // test helper needs executable scripts
+	require.NoError(t, err)
+}
+
 // runGit executes a git command in the given directory and fails the test on error.
 func runGit(t *testing.T, dir string, args ...string) {
 	t.Helper()
@@ -1218,6 +1225,170 @@ func TestHandleEarlyFlags(t *testing.T) {
 		require.Error(t, err)
 		assert.True(t, done)
 	})
+
+	t.Run("init_error", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		origDir, err := os.Getwd()
+		require.NoError(t, err)
+		require.NoError(t, os.Chdir(tmpDir))
+		t.Cleanup(func() { require.NoError(t, os.Chdir(origDir)) })
+
+		// create .git so repo root check passes
+		require.NoError(t, os.Mkdir(filepath.Join(tmpDir, ".git"), 0o700))
+
+		// make .ralphex point to a file so MkdirAll fails
+		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".ralphex"), []byte("x"), 0o600))
+
+		done, err := handleEarlyFlags(opts{Init: true})
+		require.Error(t, err)
+		assert.True(t, done)
+	})
+
+	t.Run("init_creates_local_config", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		origDir, err := os.Getwd()
+		require.NoError(t, err)
+		require.NoError(t, os.Chdir(tmpDir))
+		t.Cleanup(func() { require.NoError(t, os.Chdir(origDir)) })
+
+		// create .git so repo root check passes
+		require.NoError(t, os.Mkdir(filepath.Join(tmpDir, ".git"), 0o700))
+
+		done, err := handleEarlyFlags(opts{Init: true})
+		require.NoError(t, err)
+		assert.True(t, done)
+		assert.DirExists(t, filepath.Join(tmpDir, ".ralphex"))
+		assert.FileExists(t, filepath.Join(tmpDir, ".ralphex", "config"))
+		assert.DirExists(t, filepath.Join(tmpDir, ".ralphex", "prompts"))
+		assert.DirExists(t, filepath.Join(tmpDir, ".ralphex", "agents"))
+	})
+
+	t.Run("init_fails_outside_repo_root", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		origDir, err := os.Getwd()
+		require.NoError(t, err)
+		require.NoError(t, os.Chdir(tmpDir))
+		t.Cleanup(func() { require.NoError(t, os.Chdir(origDir)) })
+
+		// no .git or .hg - should fail
+		done, err := handleEarlyFlags(opts{Init: true})
+		require.Error(t, err)
+		assert.True(t, done)
+		assert.Contains(t, err.Error(), "must run from repository root")
+	})
+
+	t.Run("init_works_with_hg_repo", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		origDir, err := os.Getwd()
+		require.NoError(t, err)
+		require.NoError(t, os.Chdir(tmpDir))
+		t.Cleanup(func() { require.NoError(t, os.Chdir(origDir)) })
+
+		// create .hg instead of .git
+		require.NoError(t, os.Mkdir(filepath.Join(tmpDir, ".hg"), 0o700))
+
+		done, err := handleEarlyFlags(opts{Init: true})
+		require.NoError(t, err)
+		assert.True(t, done)
+		assert.DirExists(t, filepath.Join(tmpDir, ".ralphex"))
+	})
+
+	t.Run("init_works_with_custom_vcs_backend", func(t *testing.T) {
+		// simulate custom VCS backend with a script that returns cwd as repo root.
+		// no .git or .hg directory — validation goes through validateRepoRoot.
+		tmpDir := t.TempDir()
+		origDir, err := os.Getwd()
+		require.NoError(t, err)
+		require.NoError(t, os.Chdir(tmpDir))
+		t.Cleanup(func() { require.NoError(t, os.Chdir(origDir)) })
+
+		// create a fake VCS script that outputs tmpDir as repo root
+		fakeVCS := filepath.Join(t.TempDir(), "fake-vcs.sh")
+		// resolve symlinks for consistent comparison (macOS /var -> /private/var)
+		resolvedTmpDir, resolveErr := filepath.EvalSymlinks(tmpDir)
+		require.NoError(t, resolveErr)
+		writeExecutable(t, fakeVCS, "#!/bin/sh\necho "+resolvedTmpDir+"\n")
+
+		cfgDir := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(cfgDir, "config"),
+			[]byte("vcs_command = "+fakeVCS), 0o600))
+
+		done, err := handleEarlyFlags(opts{Init: true, ConfigDir: cfgDir})
+		require.NoError(t, err)
+		assert.True(t, done)
+		assert.DirExists(t, filepath.Join(tmpDir, ".ralphex"))
+	})
+
+	t.Run("init_fails_with_custom_vcs_in_arbitrary_dir", func(t *testing.T) {
+		// custom VCS backend configured but command fails — must reject
+		tmpDir := t.TempDir()
+		origDir, err := os.Getwd()
+		require.NoError(t, err)
+		require.NoError(t, os.Chdir(tmpDir))
+		t.Cleanup(func() { require.NoError(t, os.Chdir(origDir)) })
+
+		// create a fake VCS script that exits with error (not a repo)
+		fakeVCS := filepath.Join(t.TempDir(), "fake-vcs.sh")
+		writeExecutable(t, fakeVCS, "#!/bin/sh\nexit 1\n")
+
+		cfgDir := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(cfgDir, "config"),
+			[]byte("vcs_command = "+fakeVCS), 0o600))
+
+		done, err := handleEarlyFlags(opts{Init: true, ConfigDir: cfgDir})
+		assert.True(t, done)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "must run from repository root")
+	})
+
+	t.Run("init_fails_with_custom_vcs_empty_root", func(t *testing.T) {
+		// custom VCS returns empty string — must reject
+		tmpDir := t.TempDir()
+		origDir, err := os.Getwd()
+		require.NoError(t, err)
+		require.NoError(t, os.Chdir(tmpDir))
+		t.Cleanup(func() { require.NoError(t, os.Chdir(origDir)) })
+
+		// create a fake VCS script that outputs empty string
+		fakeVCS := filepath.Join(t.TempDir(), "fake-vcs.sh")
+		writeExecutable(t, fakeVCS, "#!/bin/sh\necho\n")
+
+		cfgDir := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(cfgDir, "config"),
+			[]byte("vcs_command = "+fakeVCS), 0o600))
+
+		done, err := handleEarlyFlags(opts{Init: true, ConfigDir: cfgDir})
+		assert.True(t, done)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "must run from repository root")
+	})
+
+	t.Run("init_fails_with_custom_vcs_in_subdirectory", func(t *testing.T) {
+		// custom VCS returns parent as root, but cwd is a subdirectory — must reject
+		tmpDir := t.TempDir()
+		subDir := filepath.Join(tmpDir, "sub")
+		require.NoError(t, os.Mkdir(subDir, 0o700))
+		origDir, err := os.Getwd()
+		require.NoError(t, err)
+		require.NoError(t, os.Chdir(subDir))
+		t.Cleanup(func() { require.NoError(t, os.Chdir(origDir)) })
+
+		// create a fake VCS script that returns parent dir as root
+		fakeVCS := filepath.Join(t.TempDir(), "fake-vcs.sh")
+		resolvedTmpDir, resolveErr := filepath.EvalSymlinks(tmpDir)
+		require.NoError(t, resolveErr)
+		writeExecutable(t, fakeVCS, "#!/bin/sh\necho "+resolvedTmpDir+"\n")
+
+		cfgDir := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(cfgDir, "config"),
+			[]byte("vcs_command = "+fakeVCS), 0o600))
+
+		done, err := handleEarlyFlags(opts{Init: true, ConfigDir: cfgDir})
+		assert.True(t, done)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "must run from repository root")
+	})
 }
 
 func TestIsResetOnly(t *testing.T) {
@@ -1235,6 +1406,10 @@ func TestIsResetOnly(t *testing.T) {
 
 	t.Run("reset_with_review", func(t *testing.T) {
 		assert.False(t, isResetOnly(opts{Reset: true, Review: true}))
+	})
+
+	t.Run("reset_with_init", func(t *testing.T) {
+		assert.False(t, isResetOnly(opts{Reset: true, Init: true}))
 	})
 }
 

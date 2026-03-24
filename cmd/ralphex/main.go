@@ -51,6 +51,7 @@ type opts struct {
 	Port                  int           `short:"p" long:"port" default:"8080" description:"web dashboard port"`
 	Host                  string        `long:"host" default:"127.0.0.1" env:"RALPHEX_WEB_HOST" description:"web dashboard listen address"`
 	Watch                 []string      `short:"w" long:"watch" description:"directories to watch for progress files (repeatable)"`
+	Init                  bool          `long:"init" description:"initialize local .ralphex/ config directory in current project"`
 	Reset                 bool          `long:"reset" description:"interactively reset global config to embedded defaults"`
 	DumpDefaults          string        `long:"dump-defaults" description:"extract raw embedded defaults to specified directory"`
 	ConfigDir             string        `long:"config-dir" env:"RALPHEX_CONFIG_DIR" description:"custom config directory"`
@@ -1001,11 +1002,84 @@ func handleEarlyFlags(o opts) (bool, error) {
 		}
 	}
 
+	if o.Init {
+		return true, initLocal(o.ConfigDir)
+	}
+
 	if o.DumpDefaults != "" {
 		return true, dumpDefaults(o.DumpDefaults)
 	}
 
 	return false, nil
+}
+
+// initLocal creates .ralphex/ config directory in current project.
+// requires running from repository root to avoid creating config in a subdirectory
+// that would never be found during normal execution.
+func initLocal(configDir string) error {
+	// check for repository root markers (.git or .hg) to prevent creating
+	// config in subdirectories where ralphex won't find it during normal execution.
+	// when a custom VCS backend is configured (not "git"), validate the repo
+	// by running the configured command with rev-parse --show-toplevel.
+	hasGit := fileExists(".git")
+	hasHg := fileExists(".hg")
+	if !hasGit && !hasHg {
+		cfg, loadErr := config.LoadReadOnly(configDir)
+		if loadErr != nil || cfg.VcsCommand == "" || cfg.VcsCommand == "git" {
+			return errors.New("must run from repository root (no .git or .hg directory found)")
+		}
+		// custom VCS backend configured — validate repo root using the backend command
+		if validErr := validateRepoRoot(cfg.VcsCommand); validErr != nil {
+			return fmt.Errorf("must run from repository root (%w)", validErr)
+		}
+	}
+
+	const localDir = ".ralphex"
+	if err := config.InitLocal(localDir); err != nil {
+		return fmt.Errorf("init local config: %w", err)
+	}
+	fmt.Printf("local config initialized in %s/\n", localDir)
+	return nil
+}
+
+// fileExists returns true if the path exists (file or directory).
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+// validateRepoRoot runs the configured VCS command to check we're at the repo root.
+// stricter than newExternalBackend (which only validates "inside a repo"):
+// here we require cwd == repo root so .ralphex/ is created at the right level.
+func validateRepoRoot(vcsCommand string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, vcsCommand, "rev-parse", "--show-toplevel")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("custom VCS backend %q cannot validate repository: %w\n%s", vcsCommand, err, strings.TrimSpace(string(out)))
+	}
+	root := strings.TrimSpace(string(out))
+	if root == "" {
+		return errors.New("VCS returned empty repository root")
+	}
+	// resolve symlinks for consistent comparison (macOS /var -> /private/var)
+	root, err = filepath.EvalSymlinks(root)
+	if err != nil {
+		return fmt.Errorf("resolve repo root: %w", err)
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("get working directory: %w", err)
+	}
+	cwd, err = filepath.EvalSymlinks(cwd)
+	if err != nil {
+		return fmt.Errorf("resolve working directory: %w", err)
+	}
+	if root != cwd {
+		return fmt.Errorf("not at repository root (root is %s)", root)
+	}
+	return nil
 }
 
 // dumpDefaults extracts raw embedded defaults to the specified directory.
@@ -1046,7 +1120,8 @@ func isResetOnly(o opts) bool {
 		!o.Serve &&
 		o.PlanDescription == "" &&
 		len(o.Watch) == 0 &&
-		o.DumpDefaults == ""
+		o.DumpDefaults == "" &&
+		!o.Init
 }
 
 // startInterruptWatcher prints immediate feedback when context is canceled.

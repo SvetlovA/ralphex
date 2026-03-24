@@ -524,6 +524,9 @@ ralphex --worktree docs/plans/feature.md
 ralphex --review --base-ref develop
 ralphex --review --base-ref abc1234 --skip-finalize
 
+# initialize local .ralphex/ config in current project (commented-out defaults)
+ralphex --init
+
 # interactive plan creation
 ralphex --plan "add user authentication"
 
@@ -571,6 +574,7 @@ ralphex --serve --port 3000 docs/plans/feature.md
 | `-w, --watch` | Directories to watch for progress files (repeatable) | - |
 | `-d, --debug` | Enable debug logging | false |
 | `--no-color` | Disable color output | false |
+| `--init` | Initialize local `.ralphex/` config in current project | - |
 | `--reset` | Interactively reset global config to embedded defaults | - |
 | `--dump-defaults` | Extract raw embedded defaults to specified directory | - |
 | `--config-dir` | Custom config directory (env: `RALPHEX_CONFIG_DIR`) | `~/.config/ralphex` |
@@ -678,6 +682,7 @@ The entire system is designed for customization - both task execution and review
 **Agent files** (`~/.config/ralphex/agents/`):
 - Edit existing files to modify agent behavior
 - Add new `.txt` files to create custom agents
+- Run `ralphex --init` to create local `.ralphex/` project config with commented-out defaults
 - Run `ralphex --reset` to interactively restore defaults, or delete all files manually
 - Run `ralphex --dump-defaults <dir>` to extract raw defaults for comparison
 - Use the `/ralphex-update` Claude Code skill to smart-merge updated defaults into customized files
@@ -762,7 +767,7 @@ On first run, ralphex creates this directory with default configuration.
 
 ### Local Project Config
 
-Projects can override global settings with a `.ralphex/` directory in the project root:
+Projects can override global settings with a `.ralphex/` directory in the project root. Run `ralphex --init` to create it with commented-out defaults:
 
 ```
 project/

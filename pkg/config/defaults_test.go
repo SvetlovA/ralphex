@@ -1268,3 +1268,87 @@ func TestDefaultsInstaller_Install_PreservesCustomAgents(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, entries, 1, "should only have the custom agent")
 }
+
+func TestInitLocal(t *testing.T) {
+	t.Run("creates new directory with defaults", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		localDir := filepath.Join(tmpDir, ".ralphex")
+
+		err := InitLocal(localDir)
+		require.NoError(t, err)
+
+		// verify directory structure
+		info, err := os.Stat(localDir)
+		require.NoError(t, err)
+		assert.True(t, info.IsDir())
+
+		// verify config file has commented-out content
+		data, err := os.ReadFile(filepath.Join(localDir, "config")) //nolint:gosec // test
+		require.NoError(t, err)
+		assert.NotEmpty(t, string(data))
+		stripped := stripComments(string(data))
+		assert.Empty(t, strings.TrimSpace(stripped), "config content should be all-commented")
+
+		// verify prompts directory with files
+		promptFiles, err := os.ReadDir(filepath.Join(localDir, "prompts"))
+		require.NoError(t, err)
+		assert.GreaterOrEqual(t, len(promptFiles), 4)
+
+		// verify agents directory with files
+		agentFiles, err := os.ReadDir(filepath.Join(localDir, "agents"))
+		require.NoError(t, err)
+		assert.GreaterOrEqual(t, len(agentFiles), 5)
+	})
+
+	t.Run("second call preserves existing customized files", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		localDir := filepath.Join(tmpDir, ".ralphex")
+
+		// first call creates defaults
+		require.NoError(t, InitLocal(localDir))
+
+		// customize config file
+		customContent := "# my config\nclaude_command = custom-claude"
+		require.NoError(t, os.WriteFile(filepath.Join(localDir, "config"), []byte(customContent), 0o600))
+
+		// second call should preserve customized config
+		require.NoError(t, InitLocal(localDir))
+
+		data, err := os.ReadFile(filepath.Join(localDir, "config")) //nolint:gosec // test
+		require.NoError(t, err)
+		assert.Equal(t, customContent, string(data))
+	})
+
+	t.Run("second call overwrites commented-only files", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		localDir := filepath.Join(tmpDir, ".ralphex")
+
+		// first call creates defaults
+		require.NoError(t, InitLocal(localDir))
+
+		// file with only comments is safe to overwrite
+		commentedContent := "# some comment\n# another comment\n"
+		require.NoError(t, os.WriteFile(filepath.Join(localDir, "config"), []byte(commentedContent), 0o600))
+
+		// second call should overwrite commented-only file
+		require.NoError(t, InitLocal(localDir))
+
+		data, err := os.ReadFile(filepath.Join(localDir, "config")) //nolint:gosec // test
+		require.NoError(t, err)
+		assert.NotEqual(t, commentedContent, string(data), "commented-only config should be overwritten")
+	})
+
+	t.Run("empty dir returns error", func(t *testing.T) {
+		err := InitLocal("")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "directory path cannot be empty")
+	})
+
+	t.Run("unwritable path returns error", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		blocker := filepath.Join(tmpDir, "blocker")
+		require.NoError(t, os.WriteFile(blocker, []byte("x"), 0o600))
+		err := InitLocal(filepath.Join(blocker, "sub"))
+		require.Error(t, err)
+	})
+}

@@ -277,11 +277,11 @@ GOOS=windows GOARCH=amd64 go build ./...
 
 ### Local Project Config (.ralphex/)
 
-Projects can have local configuration that overrides global settings:
+Projects can have local configuration that overrides global settings. Run `ralphex --init` to create the `.ralphex/` directory with commented-out defaults:
 
 ```
 project/
-├── .ralphex/           # optional, project-local config
+├── .ralphex/           # optional, project-local config (created by --init)
 │   ├── config          # overrides specific settings (per-field merge)
 │   ├── prompts/        # per-file fallback: local → global → embedded
 │   │   └── task.txt    # only override task prompt
@@ -360,6 +360,7 @@ Variables are also expanded inside agent content, so custom agents can use `{{DE
 **Customization:**
 - Edit files in `~/.config/ralphex/agents/` to modify agent prompts
 - Add new `.txt` files to create custom agents
+- Run `ralphex --init` to create local `.ralphex/` project config with commented-out defaults
 - Run `ralphex --reset` to interactively restore defaults, or delete ALL `.txt` files manually
 - Run `ralphex --dump-defaults <dir>` to extract raw embedded defaults for comparison or merging
 - Use `/ralphex-update` skill for smart merging of updated defaults into customized configs
