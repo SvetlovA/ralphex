@@ -133,6 +133,7 @@ func New(cfg Config, log Logger, holder *status.PhaseHolder) *Runner {
 		claudeExec.Args = cfg.AppConfig.ClaudeArgs
 		claudeExec.ErrorPatterns = cfg.AppConfig.ClaudeErrorPatterns
 		claudeExec.LimitPatterns = cfg.AppConfig.ClaudeLimitPatterns
+		claudeExec.IdleTimeout = cfg.AppConfig.IdleTimeout
 	}
 
 	// build codex executor with config values
@@ -1172,7 +1173,14 @@ func (r *Runner) runWithSessionTimeout(ctx context.Context, run func(context.Con
 	r.lastSessionTimedOut = false
 	sessionTimeout := r.sessionTimeout()
 	if sessionTimeout <= 0 || toolName != "claude" {
-		return run(ctx, prompt) // no timeout configured or non-claude tool
+		result := run(ctx, prompt) // no timeout configured or non-claude tool
+		// idle timeout without signal looks like "nothing to fix" to review loops;
+		// treat it like session timeout so they retry instead of exiting.
+		if result.IdleTimedOut && result.Signal == "" {
+			r.log.Print("warning: %s session idle timed out, no output activity detected", toolName)
+			r.lastSessionTimedOut = true
+		}
+		return result
 	}
 
 	childCtx, cancel := context.WithTimeout(ctx, sessionTimeout)
@@ -1189,6 +1197,10 @@ func (r *Runner) runWithSessionTimeout(ctx context.Context, run func(context.Con
 			toolName, sessionTimeout)
 		result.Error = nil
 		result.Signal = "" // clear any signal emitted before timeout; can't trust partial session
+		r.lastSessionTimedOut = true
+	} else if result.IdleTimedOut && result.Signal == "" {
+		// idle timeout without signal: same treatment as session timeout for review loops
+		r.log.Print("warning: %s session idle timed out, no output activity detected", toolName)
 		r.lastSessionTimedOut = true
 	}
 
