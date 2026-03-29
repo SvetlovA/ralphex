@@ -45,6 +45,9 @@ ralphex --wait 1h docs/plans/feature.md
 # set per-session timeout to kill hanging claude sessions
 ralphex --session-timeout 30m docs/plans/feature.md
 
+# kill claude session when no output for 5 minutes (idle detection)
+ralphex --idle-timeout 5m docs/plans/feature.md
+
 # codex-only mode (alias for --external-only, deprecated)
 ralphex --codex-only
 
@@ -61,6 +64,9 @@ ralphex --review --base-ref abc1234 --skip-finalize
 # interactive plan creation — Claude asks questions, generates draft,
 # user reviews with accept/revise/interactive review ($EDITOR)/reject
 ralphex --plan "add user authentication"
+
+# initialize local .ralphex/ config in current project (commented-out defaults)
+ralphex --init
 
 # reset global config to defaults (interactive)
 ralphex --reset
@@ -107,7 +113,7 @@ Configuration directory: `~/.config/ralphex/` (override with `--config-dir` or `
 
 **Stalemate detection:** `review_patience` config option (or `--review-patience` CLI flag) terminates the external review loop early when Claude produces no commits for N consecutive rounds. Set to 0 (default) to disable. Useful when the external tool and Claude can't agree on findings.
 
-**Manual break:** Press Ctrl+\ (SIGQUIT) during the external review loop to terminate it immediately. Not available on Windows.
+**Manual break (Ctrl+\):** Press Ctrl+\ (SIGQUIT) to intervene during execution. In the task phase, it pauses execution and prompts "press Enter to continue, Ctrl+C to abort" — on Enter the same task re-runs with a fresh session that re-reads the plan file, so you can edit the plan mid-run. In the external review phase, it terminates the loop immediately. Not available on Windows.
 
 **Custom external review:** Set `external_review_tool = custom` and `custom_review_script = /path/to/script.sh` to use your own AI tool instead of codex. Script receives prompt file path as single argument, outputs findings to stdout. ralphex passes the output to Claude for evaluation and fixing.
 
@@ -119,9 +125,13 @@ Configuration directory: `~/.config/ralphex/` (override with `--config-dir` or `
 
 **Session timeout:** `--session-timeout` flag (or `session_timeout` config option) sets a per-session timeout for claude. When a claude session exceeds the timeout (e.g., agent starts a blocking operation), the session is killed and the phase loop continues to the next iteration. Claude-only; codex and custom executors are not affected. Disabled by default.
 
+**Idle timeout:** `--idle-timeout` flag (or `idle_timeout` config option) kills claude sessions when no output is received for a specified duration. Unlike session timeout (fixed wall-clock limit), idle timeout resets on each output line and only fires when the session goes silent. Useful for detecting hung sessions that completed work but didn't exit. Claude-only. Disabled by default.
+
 **Rate limit retry:** `--wait` flag (or `wait_on_limit` config option) enables automatic retry when rate limits are detected. Limit patterns (`claude_limit_patterns`, `codex_limit_patterns`) are checked before error patterns — when a limit pattern matches and wait is configured, ralphex waits the specified duration and retries. Without `--wait`, limit matches fall through to error pattern behavior (exit). Default limit patterns: `You've hit your limit` (claude), `Rate limit,quota exceeded` (codex).
 
 **Notifications** (`notify_*` fields in config): Optional alerts on completion/failure via `telegram`, `email`, `slack`, `webhook`, or `custom` script. Disabled by default. See `docs/notifications.md` for setup.
+
+Run `ralphex --init` to create local `.ralphex/` project config with commented-out defaults.
 
 Run `ralphex --reset` to restore default configuration interactively.
 

@@ -56,6 +56,7 @@ linters:
         - G115 # integer overflow uintptr->int, standard fd conversion pattern
         - G118 # context cancel not called, false positives on goroutines/callbacks/returns
         - G204 # subprocess with variable, core functionality of the tool
+        - G702 # command injection via taint analysis, same as G204 for newer gosec versions
         - G703 # path traversal taint analysis, config paths from trusted sources
         - G705 # XSS taint analysis, CLI stdout and JSON API responses
         - G706 # log injection taint analysis, logs to stderr

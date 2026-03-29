@@ -96,6 +96,8 @@ ralphex executes plans in four phases with automated code reviews, plus an optio
 4. Marks checkboxes as done `[x]`, commits changes
 5. Repeats until all tasks complete or max iterations reached
 
+**Steering mid-run:** Press Ctrl+\ (SIGQUIT) during a task iteration to pause execution. ralphex cancels the current Claude session and prompts "press Enter to continue, Ctrl+C to abort". While paused, you can edit the plan file — on Enter, the same task re-runs with a fresh session that re-reads the plan. Press Ctrl+C to abort cleanly. Not available on Windows.
+
 ### Phase 2: First Code Review
 
 Launches 5 review agents **in parallel** via Claude Code Task tool:
@@ -122,7 +124,7 @@ The loop terminates when: all issues resolved, max iterations reached, stalemate
 
 **Stalemate detection:** When the external tool and Claude can't agree on findings, the loop can waste tokens iterating to the max. Set `--review-patience=N` (or `review_patience` in config) to terminate after N consecutive rounds with no commits or working tree changes.
 
-**Manual break:** Press Ctrl+\ (SIGQUIT) during the external review loop to terminate it immediately. The current executor run is cancelled via context cancellation. Not available on Windows.
+**Manual break:** Press Ctrl+\ (SIGQUIT) during the external review loop to terminate it immediately. The current executor run is cancelled via context cancellation. During the task phase, Ctrl+\ pauses instead — see [Phase 1: Task Execution](#phase-1-task-execution). Not available on Windows.
 
 Supported tools:
 - **codex** (default): OpenAI Codex for independent code review
@@ -524,6 +526,9 @@ ralphex --worktree docs/plans/feature.md
 ralphex --review --base-ref develop
 ralphex --review --base-ref abc1234 --skip-finalize
 
+# initialize local .ralphex/ config in current project (commented-out defaults)
+ralphex --init
+
 # interactive plan creation
 ralphex --plan "add user authentication"
 
@@ -541,6 +546,9 @@ ralphex --wait 1h docs/plans/feature.md
 
 # set per-session timeout to kill hanging claude sessions
 ralphex --session-timeout 30m docs/plans/feature.md
+
+# kill claude session when no output for 5 minutes (idle detection)
+ralphex --idle-timeout 5m docs/plans/feature.md
 
 # with web dashboard
 ralphex --serve docs/plans/feature.md
@@ -564,6 +572,7 @@ ralphex --serve --port 3000 docs/plans/feature.md
 | `--skip-finalize` | Skip finalize step even if enabled in config | false |
 | `--wait` | Wait duration before retrying on rate limit (e.g., `1h`, `30m`) | disabled |
 | `--session-timeout` | Per-session timeout for claude (e.g., `30m`, `1h`). Kills hanging sessions | disabled |
+| `--idle-timeout` | Kill claude session when no output for specified duration (e.g., `5m`). Resets on each output line | disabled |
 | `--worktree` | Run in isolated git worktree (full and tasks-only modes only) | false |
 | `--plan` | Create plan interactively (provide description) | - |
 | `-s, --serve` | Start web dashboard for real-time streaming | false |
@@ -571,6 +580,7 @@ ralphex --serve --port 3000 docs/plans/feature.md
 | `-w, --watch` | Directories to watch for progress files (repeatable) | - |
 | `-d, --debug` | Enable debug logging | false |
 | `--no-color` | Disable color output | false |
+| `--init` | Initialize local `.ralphex/` config in current project | - |
 | `--reset` | Interactively reset global config to embedded defaults | - |
 | `--dump-defaults` | Extract raw embedded defaults to specified directory | - |
 | `--config-dir` | Custom config directory (env: `RALPHEX_CONFIG_DIR`) | `~/.config/ralphex` |
@@ -678,6 +688,7 @@ The entire system is designed for customization - both task execution and review
 **Agent files** (`~/.config/ralphex/agents/`):
 - Edit existing files to modify agent behavior
 - Add new `.txt` files to create custom agents
+- Run `ralphex --init` to create local `.ralphex/` project config with commented-out defaults
 - Run `ralphex --reset` to interactively restore defaults, or delete all files manually
 - Run `ralphex --dump-defaults <dir>` to extract raw defaults for comparison
 - Use the `/ralphex-update` Claude Code skill to smart-merge updated defaults into customized files
@@ -762,7 +773,7 @@ On first run, ralphex creates this directory with default configuration.
 
 ### Local Project Config
 
-Projects can override global settings with a `.ralphex/` directory in the project root:
+Projects can override global settings with a `.ralphex/` directory in the project root. Run `ralphex --init` to create it with commented-out defaults:
 
 ```
 project/
@@ -820,6 +831,7 @@ Use `--config-dir` or `RALPHEX_CONFIG_DIR` to override the global config locatio
 | `codex_limit_patterns` | Limit patterns for codex triggering wait+retry (comma-separated) | `Rate limit,quota exceeded` |
 | `wait_on_limit` | Wait duration before retrying on rate limit (e.g., `1h`, `30m`) | disabled |
 | `session_timeout` | Per-session timeout for claude (e.g., `30m`, `1h`). Kills hanging sessions | disabled |
+| `idle_timeout` | Kill claude session when no output for specified duration (e.g., `5m`). Resets on each output line | disabled |
 
 Colors use 24-bit RGB (true color), supported natively by all modern terminals (iTerm2, Kitty, Terminal.app, Windows Terminal, GNOME Terminal, Alacritty, Zed, VS Code, etc). Older terminals will degrade gracefully. Use `--no-color` to disable colors entirely.
 

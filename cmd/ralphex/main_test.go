@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fatih/color"
+	flags "github.com/jessevdk/go-flags"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -614,6 +617,69 @@ func TestSessionTimeoutFlag(t *testing.T) {
 	})
 }
 
+func TestIdleTimeoutFlag(t *testing.T) {
+	t.Run("cli_overrides_config", func(t *testing.T) {
+		cfg := &config.Config{IdleTimeout: 10 * time.Minute, IdleTimeoutSet: true}
+		o := opts{IdleTimeout: 5 * time.Minute}
+		applyCLIOverrides(o, cfg)
+		assert.Equal(t, 5*time.Minute, cfg.IdleTimeout)
+		assert.True(t, cfg.IdleTimeoutSet)
+	})
+
+	t.Run("zero_preserves_config", func(t *testing.T) {
+		cfg := &config.Config{IdleTimeout: 10 * time.Minute, IdleTimeoutSet: true}
+		o := opts{IdleTimeout: 0} // not set
+		applyCLIOverrides(o, cfg)
+		assert.Equal(t, 10*time.Minute, cfg.IdleTimeout, "config value should be preserved when CLI not set")
+		assert.True(t, cfg.IdleTimeoutSet)
+	})
+
+	t.Run("cli_sets_unset_config", func(t *testing.T) {
+		cfg := &config.Config{} // idle_timeout not set
+		o := opts{IdleTimeout: 5 * time.Minute}
+		applyCLIOverrides(o, cfg)
+		assert.Equal(t, 5*time.Minute, cfg.IdleTimeout)
+		assert.True(t, cfg.IdleTimeoutSet)
+	})
+}
+
+func TestExplicitZeroOverridesConfig(t *testing.T) {
+	// verify that --flag 0 on the command line overrides a non-zero config value.
+	// uses markFlagsSet with a real go-flags parser to populate the *Set bools.
+	makeOpts := func(flagName string) opts {
+		var o opts
+		p := flags.NewParser(&o, flags.Default)
+		_, err := p.ParseArgs([]string{"--" + flagName, "0"})
+		require.NoError(t, err)
+		o.markFlagsSet(p)
+		return o
+	}
+
+	t.Run("idle_timeout_zero_overrides_config", func(t *testing.T) {
+		cfg := &config.Config{IdleTimeout: 5 * time.Minute, IdleTimeoutSet: true}
+		o := makeOpts("idle-timeout")
+		applyCLIOverrides(o, cfg)
+		assert.Equal(t, time.Duration(0), cfg.IdleTimeout)
+		assert.True(t, cfg.IdleTimeoutSet)
+	})
+
+	t.Run("session_timeout_zero_overrides_config", func(t *testing.T) {
+		cfg := &config.Config{SessionTimeout: 30 * time.Minute, SessionTimeoutSet: true}
+		o := makeOpts("session-timeout")
+		applyCLIOverrides(o, cfg)
+		assert.Equal(t, time.Duration(0), cfg.SessionTimeout)
+		assert.True(t, cfg.SessionTimeoutSet)
+	})
+
+	t.Run("wait_zero_overrides_config", func(t *testing.T) {
+		cfg := &config.Config{WaitOnLimit: 1 * time.Hour, WaitOnLimitSet: true}
+		o := makeOpts("wait")
+		applyCLIOverrides(o, cfg)
+		assert.Equal(t, time.Duration(0), cfg.WaitOnLimit)
+		assert.True(t, cfg.WaitOnLimitSet)
+	})
+}
+
 func TestGetCurrentBranch(t *testing.T) {
 	t.Run("returns_branch_name", func(t *testing.T) {
 		dir := setupTestRepo(t)
@@ -656,6 +722,9 @@ func TestValidateFlags(t *testing.T) {
 		{name: "negative_session_timeout_is_invalid", opts: opts{SessionTimeout: -10 * time.Minute}, wantErr: true, errMsg: "non-negative"},
 		{name: "positive_session_timeout_is_valid", opts: opts{SessionTimeout: 30 * time.Minute}, wantErr: false},
 		{name: "zero_session_timeout_is_valid", opts: opts{SessionTimeout: 0}, wantErr: false},
+		{name: "negative_idle_timeout_is_invalid", opts: opts{IdleTimeout: -5 * time.Minute}, wantErr: true, errMsg: "non-negative"},
+		{name: "positive_idle_timeout_is_valid", opts: opts{IdleTimeout: 5 * time.Minute}, wantErr: false},
+		{name: "zero_idle_timeout_is_valid", opts: opts{IdleTimeout: 0}, wantErr: false},
 	}
 
 	for _, tc := range tests {
@@ -1052,6 +1121,13 @@ func TestExecutePlanRequestHasNotifySvc(t *testing.T) {
 	req.NotifySvc.Send(t.Context(), notify.Result{Status: "success"})
 }
 
+// writeExecutable writes content to path and makes it executable.
+func writeExecutable(t *testing.T, path, content string) {
+	t.Helper()
+	err := os.WriteFile(path, []byte(content), 0o700) //nolint:gosec // test helper needs executable scripts
+	require.NoError(t, err)
+}
+
 // runGit executes a git command in the given directory and fails the test on error.
 func runGit(t *testing.T, dir string, args ...string) {
 	t.Helper()
@@ -1218,6 +1294,170 @@ func TestHandleEarlyFlags(t *testing.T) {
 		require.Error(t, err)
 		assert.True(t, done)
 	})
+
+	t.Run("init_error", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		origDir, err := os.Getwd()
+		require.NoError(t, err)
+		require.NoError(t, os.Chdir(tmpDir))
+		t.Cleanup(func() { require.NoError(t, os.Chdir(origDir)) })
+
+		// create .git so repo root check passes
+		require.NoError(t, os.Mkdir(filepath.Join(tmpDir, ".git"), 0o700))
+
+		// make .ralphex point to a file so MkdirAll fails
+		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".ralphex"), []byte("x"), 0o600))
+
+		done, err := handleEarlyFlags(opts{Init: true})
+		require.Error(t, err)
+		assert.True(t, done)
+	})
+
+	t.Run("init_creates_local_config", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		origDir, err := os.Getwd()
+		require.NoError(t, err)
+		require.NoError(t, os.Chdir(tmpDir))
+		t.Cleanup(func() { require.NoError(t, os.Chdir(origDir)) })
+
+		// create .git so repo root check passes
+		require.NoError(t, os.Mkdir(filepath.Join(tmpDir, ".git"), 0o700))
+
+		done, err := handleEarlyFlags(opts{Init: true})
+		require.NoError(t, err)
+		assert.True(t, done)
+		assert.DirExists(t, filepath.Join(tmpDir, ".ralphex"))
+		assert.FileExists(t, filepath.Join(tmpDir, ".ralphex", "config"))
+		assert.DirExists(t, filepath.Join(tmpDir, ".ralphex", "prompts"))
+		assert.DirExists(t, filepath.Join(tmpDir, ".ralphex", "agents"))
+	})
+
+	t.Run("init_fails_outside_repo_root", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		origDir, err := os.Getwd()
+		require.NoError(t, err)
+		require.NoError(t, os.Chdir(tmpDir))
+		t.Cleanup(func() { require.NoError(t, os.Chdir(origDir)) })
+
+		// no .git or .hg - should fail
+		done, err := handleEarlyFlags(opts{Init: true})
+		require.Error(t, err)
+		assert.True(t, done)
+		assert.Contains(t, err.Error(), "must run from repository root")
+	})
+
+	t.Run("init_works_with_hg_repo", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		origDir, err := os.Getwd()
+		require.NoError(t, err)
+		require.NoError(t, os.Chdir(tmpDir))
+		t.Cleanup(func() { require.NoError(t, os.Chdir(origDir)) })
+
+		// create .hg instead of .git
+		require.NoError(t, os.Mkdir(filepath.Join(tmpDir, ".hg"), 0o700))
+
+		done, err := handleEarlyFlags(opts{Init: true})
+		require.NoError(t, err)
+		assert.True(t, done)
+		assert.DirExists(t, filepath.Join(tmpDir, ".ralphex"))
+	})
+
+	t.Run("init_works_with_custom_vcs_backend", func(t *testing.T) {
+		// simulate custom VCS backend with a script that returns cwd as repo root.
+		// no .git or .hg directory — validation goes through validateRepoRoot.
+		tmpDir := t.TempDir()
+		origDir, err := os.Getwd()
+		require.NoError(t, err)
+		require.NoError(t, os.Chdir(tmpDir))
+		t.Cleanup(func() { require.NoError(t, os.Chdir(origDir)) })
+
+		// create a fake VCS script that outputs tmpDir as repo root
+		fakeVCS := filepath.Join(t.TempDir(), "fake-vcs.sh")
+		// resolve symlinks for consistent comparison (macOS /var -> /private/var)
+		resolvedTmpDir, resolveErr := filepath.EvalSymlinks(tmpDir)
+		require.NoError(t, resolveErr)
+		writeExecutable(t, fakeVCS, "#!/bin/sh\necho "+resolvedTmpDir+"\n")
+
+		cfgDir := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(cfgDir, "config"),
+			[]byte("vcs_command = "+fakeVCS), 0o600))
+
+		done, err := handleEarlyFlags(opts{Init: true, ConfigDir: cfgDir})
+		require.NoError(t, err)
+		assert.True(t, done)
+		assert.DirExists(t, filepath.Join(tmpDir, ".ralphex"))
+	})
+
+	t.Run("init_fails_with_custom_vcs_in_arbitrary_dir", func(t *testing.T) {
+		// custom VCS backend configured but command fails — must reject
+		tmpDir := t.TempDir()
+		origDir, err := os.Getwd()
+		require.NoError(t, err)
+		require.NoError(t, os.Chdir(tmpDir))
+		t.Cleanup(func() { require.NoError(t, os.Chdir(origDir)) })
+
+		// create a fake VCS script that exits with error (not a repo)
+		fakeVCS := filepath.Join(t.TempDir(), "fake-vcs.sh")
+		writeExecutable(t, fakeVCS, "#!/bin/sh\nexit 1\n")
+
+		cfgDir := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(cfgDir, "config"),
+			[]byte("vcs_command = "+fakeVCS), 0o600))
+
+		done, err := handleEarlyFlags(opts{Init: true, ConfigDir: cfgDir})
+		assert.True(t, done)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "must run from repository root")
+	})
+
+	t.Run("init_fails_with_custom_vcs_empty_root", func(t *testing.T) {
+		// custom VCS returns empty string — must reject
+		tmpDir := t.TempDir()
+		origDir, err := os.Getwd()
+		require.NoError(t, err)
+		require.NoError(t, os.Chdir(tmpDir))
+		t.Cleanup(func() { require.NoError(t, os.Chdir(origDir)) })
+
+		// create a fake VCS script that outputs empty string
+		fakeVCS := filepath.Join(t.TempDir(), "fake-vcs.sh")
+		writeExecutable(t, fakeVCS, "#!/bin/sh\necho\n")
+
+		cfgDir := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(cfgDir, "config"),
+			[]byte("vcs_command = "+fakeVCS), 0o600))
+
+		done, err := handleEarlyFlags(opts{Init: true, ConfigDir: cfgDir})
+		assert.True(t, done)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "must run from repository root")
+	})
+
+	t.Run("init_fails_with_custom_vcs_in_subdirectory", func(t *testing.T) {
+		// custom VCS returns parent as root, but cwd is a subdirectory — must reject
+		tmpDir := t.TempDir()
+		subDir := filepath.Join(tmpDir, "sub")
+		require.NoError(t, os.Mkdir(subDir, 0o700))
+		origDir, err := os.Getwd()
+		require.NoError(t, err)
+		require.NoError(t, os.Chdir(subDir))
+		t.Cleanup(func() { require.NoError(t, os.Chdir(origDir)) })
+
+		// create a fake VCS script that returns parent dir as root
+		fakeVCS := filepath.Join(t.TempDir(), "fake-vcs.sh")
+		resolvedTmpDir, resolveErr := filepath.EvalSymlinks(tmpDir)
+		require.NoError(t, resolveErr)
+		writeExecutable(t, fakeVCS, "#!/bin/sh\necho "+resolvedTmpDir+"\n")
+
+		cfgDir := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(cfgDir, "config"),
+			[]byte("vcs_command = "+fakeVCS), 0o600))
+
+		done, err := handleEarlyFlags(opts{Init: true, ConfigDir: cfgDir})
+		assert.True(t, done)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "must run from repository root")
+	})
 }
 
 func TestIsResetOnly(t *testing.T) {
@@ -1235,6 +1475,10 @@ func TestIsResetOnly(t *testing.T) {
 
 	t.Run("reset_with_review", func(t *testing.T) {
 		assert.False(t, isResetOnly(opts{Reset: true, Review: true}))
+	})
+
+	t.Run("reset_with_init", func(t *testing.T) {
+		assert.False(t, isResetOnly(opts{Reset: true, Init: true}))
 	})
 }
 
@@ -1680,7 +1924,7 @@ func TestDisplayStats(t *testing.T) {
 
 		req := executePlanRequest{PlanFile: "docs/plans/feature.md", Colors: colors}
 		stats := git.DiffStats{Files: 5, Additions: 200, Deletions: 50}
-		displayStats(req, baseLog, stats, "2m15s")
+		displayStats(req, baseLog, stats, "2m15s", "feature-branch")
 	})
 
 	t.Run("without_diff_stats", func(t *testing.T) {
@@ -1695,7 +1939,7 @@ func TestDisplayStats(t *testing.T) {
 		defer func() { _ = baseLog.Close() }()
 
 		req := executePlanRequest{Colors: colors}
-		displayStats(req, baseLog, git.DiffStats{}, "30s")
+		displayStats(req, baseLog, git.DiffStats{}, "30s", "main")
 	})
 
 	t.Run("with_main_plan_file", func(t *testing.T) {
@@ -1714,8 +1958,48 @@ func TestDisplayStats(t *testing.T) {
 			MainPlanFile: "docs/plans/feature.md",
 			Colors:       colors,
 		}
-		displayStats(req, baseLog, git.DiffStats{Files: 1, Additions: 10, Deletions: 5}, "10s")
+		displayStats(req, baseLog, git.DiffStats{Files: 1, Additions: 10, Deletions: 5}, "10s", "feature-wt")
 	})
+}
+
+func TestDisplayMeta(t *testing.T) {
+	tests := []struct {
+		name, planFile, branch, progressPath string
+		indent                               int
+		wantContains                         []string
+		wantNotContains                      []string
+	}{
+		{name: "no_indent_with_plan", indent: 0, planFile: "docs/plans/feature.md", branch: "feature-branch",
+			progressPath: ".ralphex/progress/progress-feature.txt",
+			wantContains: []string{"plan: docs/plans/feature.md", "branch: feature-branch", "progress log: .ralphex/progress/progress-feature.txt"}},
+		{name: "indented_with_plan", indent: 2, planFile: "docs/plans/feature.md", branch: "main",
+			progressPath: ".ralphex/progress/progress-feature.txt",
+			wantContains: []string{"  plan: docs/plans/feature.md", "  branch: main", "  progress log: .ralphex/progress/progress-feature.txt"}},
+		{name: "no_plan_file", indent: 0, planFile: "", branch: "develop",
+			progressPath:    ".ralphex/progress/progress.txt",
+			wantContains:    []string{"branch: develop", "progress log: .ralphex/progress/progress.txt"},
+			wantNotContains: []string{"plan:"}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			colors := testColors()
+			var buf bytes.Buffer
+			origOutput := color.Output
+			color.Output = &buf
+			t.Cleanup(func() { color.Output = origOutput })
+
+			displayMeta(colors, tc.indent, tc.planFile, tc.branch, tc.progressPath)
+
+			out := buf.String()
+			for _, want := range tc.wantContains {
+				assert.Contains(t, out, want)
+			}
+			for _, notWant := range tc.wantNotContains {
+				assert.NotContains(t, out, notWant)
+			}
+		})
+	}
 }
 
 func TestKeepDashboardAlive(t *testing.T) {
@@ -1741,6 +2025,37 @@ func TestKeepDashboardAlive(t *testing.T) {
 		keepDashboardAlive(ctx, opts{Serve: true, Port: 9999, Host: "127.0.0.1"}, req, closeLog)
 		assert.True(t, closeCalled, "closeLog should be called when serve is enabled")
 	})
+}
+
+func TestMakePauseHandler_EnterResumes(t *testing.T) {
+	stdin := bytes.NewReader([]byte("\n"))
+	var stdout bytes.Buffer
+	handler := makePauseHandler(stdin, &stdout)
+	result := handler(context.Background())
+	assert.True(t, result, "handler should return true on Enter")
+	assert.Contains(t, stdout.String(), "session interrupted")
+}
+
+func TestMakePauseHandler_ContextCancelAborts(t *testing.T) {
+	// stdin that blocks forever (never returns)
+	r, w := io.Pipe()
+	defer w.Close()
+	defer r.Close()
+	var stdout bytes.Buffer
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel immediately
+	handler := makePauseHandler(r, &stdout)
+	result := handler(ctx)
+	assert.False(t, result, "handler should return false on context cancel")
+}
+
+func TestMakePauseHandler_EOFAborts(t *testing.T) {
+	// empty reader returns EOF immediately, treated as abort (safe default for Docker/piped stdin)
+	stdin := bytes.NewReader(nil)
+	var stdout bytes.Buffer
+	handler := makePauseHandler(stdin, &stdout)
+	result := handler(context.Background())
+	assert.False(t, result, "handler should return false on EOF (stdin closed = abort)")
 }
 
 // branchExists checks if a branch exists in the given git repository.

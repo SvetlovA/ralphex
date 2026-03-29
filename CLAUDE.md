@@ -72,8 +72,9 @@ docs/plans/         # plan files location
 - `--skip-finalize` flag disables finalize step for a single run
 - `--wait` flag enables rate limit retry with specified duration (e.g., `--wait 1h`)
 - `--session-timeout` flag sets per-session timeout for claude (e.g., `--session-timeout 30m`), kills hanging sessions
+- `--idle-timeout` flag kills claude sessions when no output is received for a specified duration (e.g., `--idle-timeout 5m`), resets on each output line
 - `--review-patience` flag terminates external review after N unchanged rounds (stalemate detection)
-- Manual break via SIGQUIT (Ctrl+\) during external review loop terminates it early via injected channel
+- Manual break via SIGQUIT (Ctrl+\) works in both task and external review loops. In task phase, break pauses execution and prompts "press Enter to continue, Ctrl+C to abort"; on resume the same task re-runs with a fresh session that re-reads the plan file (allowing mid-run plan edits). In external review, break terminates the loop immediately. Not available on Windows
 - Custom external review support via scripts (wraps any AI tool)
 - Configuration via `~/.config/ralphex/` with embedded defaults
 - File watching for multi-session dashboard using fsnotify
@@ -115,7 +116,8 @@ Allows using custom scripts instead of codex for external code review:
 - `max_external_iterations` config / `--max-external-iterations` CLI flag overrides external review loop limit (0 = auto, derived as `max(3, max_iterations/5)`)
 - `review_patience` config / `--review-patience` CLI flag enables stalemate detection: tracks consecutive rounds with no commits, terminates early when threshold reached (0 = disabled)
 - `session_timeout` config / `--session-timeout` CLI flag sets per-session timeout for claude (e.g., `30m`, `1h`). When a claude session exceeds the timeout, it is killed and the phase loop continues to the next iteration. Applied in `runWithLimitRetry` via `context.WithTimeout`. Claude-only; codex and custom executors are not affected. Disabled by default (empty/0)
-- Manual break: pressing Ctrl+\ (SIGQUIT) during external review terminates the loop immediately via context cancellation. Break channel injected from `cmd/ralphex/` into Runner via `SetBreakCh()`. Not available on Windows
+- `idle_timeout` config / `--idle-timeout` CLI flag kills claude sessions when no output is received for a specified duration (e.g., `5m`). Unlike session timeout (fixed wall-clock limit), idle timeout resets on each output line and only fires when the session goes silent. Applied in `ClaudeExecutor.Run()` via `time.AfterFunc` with closure-based timer reset. Claude-only. Disabled by default (empty/0)
+- Manual break: pressing Ctrl+\ (SIGQUIT) during task phase pauses execution ("press Enter to continue, Ctrl+C to abort"); on resume the same task re-runs with a fresh session that re-reads the plan file. During external review, Ctrl+\ terminates the loop immediately. Break channel is repeatable (send-on-channel, not close-once). `SetPauseHandler()` sets the callback for task pause UX. Not available on Windows
 - `codex_enabled = false` backward compat: treated as `external_review_tool = none`
 
 Key files:
@@ -278,14 +280,15 @@ GOOS=windows GOARCH=amd64 go build ./...
 - `review_patience` config option: terminate external review after N consecutive unchanged rounds (0 = disabled). CLI flag `--review-patience` takes precedence
 - `wait_on_limit` config option: duration to wait before retrying on rate limit (e.g., "1h", "30m"). CLI flag `--wait` takes precedence. Disabled by default
 - `session_timeout` config option: per-session timeout for claude (e.g., "30m", "1h"). Kills hanging sessions and continues to next iteration. CLI flag `--session-timeout` takes precedence. Disabled by default
+- `idle_timeout` config option: kills claude sessions when no output for specified duration (e.g., "5m"). Resets on each output line, only fires when session goes silent. CLI flag `--idle-timeout` takes precedence. Disabled by default
 
 ### Local Project Config (.ralphex/)
 
-Projects can have local configuration that overrides global settings:
+Projects can have local configuration that overrides global settings. Run `ralphex --init` to create the `.ralphex/` directory with commented-out defaults:
 
 ```
 project/
-├── .ralphex/           # optional, project-local config
+├── .ralphex/           # optional, project-local config (created by --init)
 │   ├── config          # overrides specific settings (per-field merge)
 │   ├── prompts/        # per-file fallback: local → global → embedded
 │   │   └── task.txt    # only override task prompt
@@ -315,7 +318,7 @@ Configurable patterns detect rate limit and quota errors in claude/codex output:
 - `codex_error_patterns`: comma-separated patterns for codex (default: "Rate limit,quota exceeded")
 - Matching is case-insensitive substring search
 - Whitespace is trimmed from each pattern
-- For claude: patterns checked on all output during normal execution (context cancellation paths bypass pattern checks)
+- For claude: patterns checked against the last 10 text blocks (not full output) to avoid false positives when analysis text mentions rate limit phrases. Context cancellation paths bypass pattern checks
 - For codex and custom executors: patterns checked only when process exits with non-zero status and context is not canceled (avoids false positives from review findings and cancellation masking)
 - On match, ralphex exits gracefully with pattern info and help command suggestion
 
@@ -364,6 +367,7 @@ Variables are also expanded inside agent content, so custom agents can use `{{DE
 **Customization:**
 - Edit files in `~/.config/ralphex/agents/` to modify agent prompts
 - Add new `.txt` files to create custom agents
+- Run `ralphex --init` to create local `.ralphex/` project config with commented-out defaults
 - Run `ralphex --reset` to interactively restore defaults, or delete ALL `.txt` files manually
 - Run `ralphex --dump-defaults <dir>` to extract raw embedded defaults for comparison or merging
 - Use `/ralphex-update` skill for smart merging of updated defaults into customized configs

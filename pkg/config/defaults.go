@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"embed"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -553,6 +554,17 @@ func (d *defaultsInstaller) dumpEmbeddedDir(destDir, embedPath string) error {
 	}
 
 	return nil
+}
+
+// InitLocal creates a local .ralphex/ configuration directory with commented-out defaults.
+// uses the same Install() logic as global config setup - existing customized files are preserved.
+// returns error if dir is empty.
+func InitLocal(dir string) error {
+	if dir == "" {
+		return errors.New("directory path cannot be empty")
+	}
+	installer := newDefaultsInstaller(defaultsFS)
+	return installer.Install(dir)
 }
 
 // DumpDefaults extracts all embedded defaults (raw, uncommented) to the specified directory.

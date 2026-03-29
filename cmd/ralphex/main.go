@@ -41,6 +41,7 @@ type opts struct {
 	BaseRef               string        `short:"b" long:"base-ref" description:"override default branch for review diffs (branch name or commit hash)"`
 	Wait                  time.Duration `long:"wait" description:"wait duration on rate limit before retry (e.g. 1h, 30m)"`
 	SessionTimeout        time.Duration `long:"session-timeout" description:"per-session timeout for claude (e.g. 30m, 1h)"`
+	IdleTimeout           time.Duration `long:"idle-timeout" description:"kill claude session after no output for this duration (e.g. 5m, 10m)"`
 	SkipFinalize          bool          `long:"skip-finalize" description:"skip finalize step even if enabled in config"`
 	Worktree              bool          `long:"worktree" description:"run in isolated git worktree"`
 	PlanDescription       string        `long:"plan" description:"create plan interactively (enter plan description)"`
@@ -51,11 +52,28 @@ type opts struct {
 	Port                  int           `short:"p" long:"port" default:"8080" description:"web dashboard port"`
 	Host                  string        `long:"host" default:"127.0.0.1" env:"RALPHEX_WEB_HOST" description:"web dashboard listen address"`
 	Watch                 []string      `short:"w" long:"watch" description:"directories to watch for progress files (repeatable)"`
+	Init                  bool          `long:"init" description:"initialize local .ralphex/ config directory in current project"`
 	Reset                 bool          `long:"reset" description:"interactively reset global config to embedded defaults"`
 	DumpDefaults          string        `long:"dump-defaults" description:"extract raw embedded defaults to specified directory"`
 	ConfigDir             string        `long:"config-dir" env:"RALPHEX_CONFIG_DIR" description:"custom config directory"`
 
 	PlanFile string `positional-arg-name:"plan-file" description:"path to plan file (optional, uses fzf if omitted)"`
+
+	// set by markFlagsSet after parsing; true when the flag was explicitly provided on the CLI
+	waitSet           bool
+	sessionTimeoutSet bool
+	idleTimeoutSet    bool
+}
+
+// markFlagsSet detects which duration flags were explicitly provided on the CLI
+// so that --flag 0 can override a non-zero config value.
+func (o *opts) markFlagsSet(parser *flags.Parser) {
+	if parser == nil {
+		return
+	}
+	o.waitSet = isFlagSet(parser, "wait")
+	o.sessionTimeoutSet = isFlagSet(parser, "session-timeout")
+	o.idleTimeoutSet = isFlagSet(parser, "idle-timeout")
 }
 
 var revision = "unknown"
@@ -170,6 +188,10 @@ func main() {
 	// setup context with signal handling
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
+
+	// detect explicitly-set zero values for duration flags so --flag 0 can disable config values.
+	// go-flags can't distinguish "not provided" from "set to zero" via the field alone.
+	o.markFlagsSet(parser)
 
 	if err := run(ctx, o); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
@@ -428,7 +450,8 @@ func buildNotifyResult(req executePlanRequest, branch, elapsed string, stats git
 }
 
 // displayStats prints completion summary with optional diff statistics and paths.
-func displayStats(req executePlanRequest, baseLog *progress.Logger, stats git.DiffStats, elapsed string) {
+// mirrors the startup header format using displayMeta for plan/branch/progress.
+func displayStats(req executePlanRequest, baseLog *progress.Logger, stats git.DiffStats, elapsed, branch string) {
 	if stats.Files > 0 {
 		baseLog.LogDiffStats(stats.Files, stats.Additions, stats.Deletions)
 		req.Colors.Info().Printf("\ncompleted in %s (%d files, +%d/-%d lines)\n",
@@ -437,16 +460,26 @@ func displayStats(req executePlanRequest, baseLog *progress.Logger, stats git.Di
 		req.Colors.Info().Printf("\ncompleted in %s\n", elapsed)
 	}
 
-	// show paths for easy copy-paste after completion summary
+	planPath := ""
 	if req.PlanFile != "" {
 		planFile := req.PlanFile
 		if req.MainPlanFile != "" {
 			planFile = req.MainPlanFile
 		}
-		completedPlanPath := filepath.Join(filepath.Dir(planFile), "completed", filepath.Base(planFile))
-		req.Colors.Info().Printf("  plan: %s\n", completedPlanPath)
+		planPath = filepath.Join(filepath.Dir(planFile), "completed", filepath.Base(planFile))
 	}
-	req.Colors.Info().Printf("  progress: %s\n", baseLog.Path())
+	displayMeta(req.Colors, 2, planPath, branch, baseLog.Path())
+}
+
+// displayMeta prints plan (if set), branch, and progress log path with the given indent.
+// file paths are converted to relative for readability.
+func displayMeta(colors *progress.Colors, indent int, planFile, branch, progressPath string) {
+	pad := strings.Repeat(" ", indent)
+	if planFile != "" {
+		colors.Info().Printf("%splan: %s\n", pad, toRelPath(planFile))
+	}
+	colors.Info().Printf("%sbranch: %s\n", pad, branch)
+	colors.Info().Printf("%sprogress log: %s\n", pad, toRelPath(progressPath))
 }
 
 // keepDashboardAlive keeps the web dashboard running after execution completes.
@@ -507,12 +540,18 @@ func executePlan(ctx context.Context, o opts, req executePlanRequest) error {
 	// create and run the runner
 	r := createRunner(req, o, runnerLog, plr.holder)
 
-	// listen for SIGQUIT (Ctrl+\) for manual external review loop termination
+	// listen for SIGQUIT (Ctrl+\) for manual break during task and review loops
 	if breakCh := startBreakSignal(); breakCh != nil {
 		r.SetBreakCh(breakCh)
+		r.SetPauseHandler(makePauseHandler(os.Stdin, os.Stdout))
 	}
 
 	if runErr := r.Run(ctx); runErr != nil {
+		if errors.Is(runErr, processor.ErrUserAborted) {
+			// user aborted during task phase — clean exit without success actions
+			fmt.Fprintln(os.Stderr, "aborted by user, plan left in place")
+			return nil
+		}
 		sendNotification(req, branch, plr.baseLog.Elapsed(), git.DiffStats{}, runErr)
 		return fmt.Errorf("runner: %w", runErr)
 	}
@@ -544,7 +583,7 @@ func executePlan(ctx context.Context, o opts, req executePlanRequest) error {
 		}
 	}
 
-	displayStats(req, plr.baseLog, stats, elapsed)
+	displayStats(req, plr.baseLog, stats, elapsed, branch)
 	keepDashboardAlive(ctx, o, req, plr.closeLog)
 
 	return nil
@@ -776,6 +815,29 @@ func modeRequiresBranch(mode processor.Mode) bool {
 	return mode == processor.ModeFull || mode == processor.ModeTasksOnly
 }
 
+// makePauseHandler returns a context-aware pause handler for task loop breaks.
+// on break, prints a message and waits for Enter to resume or context cancellation to abort.
+// stdin read runs in a goroutine so the handler responds to Ctrl+C (SIGINT) promptly.
+func makePauseHandler(stdin io.Reader, stdout io.Writer) func(ctx context.Context) bool {
+	return func(ctx context.Context) bool {
+		fmt.Fprintln(stdout, "\nsession interrupted. press Enter to continue, Ctrl+C to abort")
+
+		resultCh := make(chan bool, 1)
+		go func() {
+			buf := make([]byte, 1)
+			n, _ := stdin.Read(buf) // blocks until Enter or EOF
+			resultCh <- n > 0       // true = Enter (resume), false = EOF (abort)
+		}()
+
+		select {
+		case resume := <-resultCh:
+			return resume
+		case <-ctx.Done():
+			return false
+		}
+	}
+}
+
 // validateFlags checks for conflicting CLI flags.
 func validateFlags(o opts) error {
 	if o.PlanDescription != "" && o.PlanFile != "" {
@@ -786,6 +848,9 @@ func validateFlags(o opts) error {
 	}
 	if o.SessionTimeout < 0 {
 		return fmt.Errorf("--session-timeout must be non-negative, got %s", o.SessionTimeout)
+	}
+	if o.IdleTimeout < 0 {
+		return fmt.Errorf("--idle-timeout must be non-negative, got %s", o.IdleTimeout)
 	}
 	return nil
 }
@@ -836,7 +901,7 @@ func printStartupInfo(info startupInfo, colors *progress.Colors) {
 		colors.Info().Printf("starting interactive plan creation\n")
 		colors.Info().Printf("request: %s\n", info.PlanDescription)
 		colors.Info().Printf("branch: %s (max %d iterations)\n", info.Branch, info.MaxIterations)
-		colors.Info().Printf("progress log: %s\n\n", info.ProgressPath)
+		colors.Info().Printf("progress log: %s\n\n", toRelPath(info.ProgressPath))
 		return
 	}
 
@@ -845,11 +910,8 @@ func printStartupInfo(info startupInfo, colors *progress.Colors) {
 		modeStr = fmt.Sprintf(" (%s mode)", info.Mode)
 	}
 	colors.Info().Printf("starting ralphex loop (max %d iterations)%s\n", info.MaxIterations, modeStr)
-	if info.PlanFile != "" {
-		colors.Info().Printf("plan: %s\n", toRelPath(info.PlanFile))
-	}
-	colors.Info().Printf("branch: %s\n", info.Branch)
-	colors.Info().Printf("progress log: %s\n\n", info.ProgressPath)
+	displayMeta(colors, 0, info.PlanFile, info.Branch, info.ProgressPath)
+	colors.Info().Printf("\n")
 }
 
 // runPlanMode executes interactive plan creation mode.
@@ -1001,11 +1063,84 @@ func handleEarlyFlags(o opts) (bool, error) {
 		}
 	}
 
+	if o.Init {
+		return true, initLocal(o.ConfigDir)
+	}
+
 	if o.DumpDefaults != "" {
 		return true, dumpDefaults(o.DumpDefaults)
 	}
 
 	return false, nil
+}
+
+// initLocal creates .ralphex/ config directory in current project.
+// requires running from repository root to avoid creating config in a subdirectory
+// that would never be found during normal execution.
+func initLocal(configDir string) error {
+	// check for repository root markers (.git or .hg) to prevent creating
+	// config in subdirectories where ralphex won't find it during normal execution.
+	// when a custom VCS backend is configured (not "git"), validate the repo
+	// by running the configured command with rev-parse --show-toplevel.
+	hasGit := fileExists(".git")
+	hasHg := fileExists(".hg")
+	if !hasGit && !hasHg {
+		cfg, loadErr := config.LoadReadOnly(configDir)
+		if loadErr != nil || cfg.VcsCommand == "" || cfg.VcsCommand == "git" {
+			return errors.New("must run from repository root (no .git or .hg directory found)")
+		}
+		// custom VCS backend configured — validate repo root using the backend command
+		if validErr := validateRepoRoot(cfg.VcsCommand); validErr != nil {
+			return fmt.Errorf("must run from repository root (%w)", validErr)
+		}
+	}
+
+	const localDir = ".ralphex"
+	if err := config.InitLocal(localDir); err != nil {
+		return fmt.Errorf("init local config: %w", err)
+	}
+	fmt.Printf("local config initialized in %s/\n", localDir)
+	return nil
+}
+
+// fileExists returns true if the path exists (file or directory).
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+// validateRepoRoot runs the configured VCS command to check we're at the repo root.
+// stricter than newExternalBackend (which only validates "inside a repo"):
+// here we require cwd == repo root so .ralphex/ is created at the right level.
+func validateRepoRoot(vcsCommand string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, vcsCommand, "rev-parse", "--show-toplevel")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("custom VCS backend %q cannot validate repository: %w\n%s", vcsCommand, err, strings.TrimSpace(string(out)))
+	}
+	root := strings.TrimSpace(string(out))
+	if root == "" {
+		return errors.New("VCS returned empty repository root")
+	}
+	// resolve symlinks for consistent comparison (macOS /var -> /private/var)
+	root, err = filepath.EvalSymlinks(root)
+	if err != nil {
+		return fmt.Errorf("resolve repo root: %w", err)
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("get working directory: %w", err)
+	}
+	cwd, err = filepath.EvalSymlinks(cwd)
+	if err != nil {
+		return fmt.Errorf("resolve working directory: %w", err)
+	}
+	if root != cwd {
+		return fmt.Errorf("not at repository root (root is %s)", root)
+	}
+	return nil
 }
 
 // dumpDefaults extracts raw embedded defaults to the specified directory.
@@ -1046,7 +1181,8 @@ func isResetOnly(o opts) bool {
 		!o.Serve &&
 		o.PlanDescription == "" &&
 		len(o.Watch) == 0 &&
-		o.DumpDefaults == ""
+		o.DumpDefaults == "" &&
+		!o.Init
 }
 
 // startInterruptWatcher prints immediate feedback when context is canceled.
@@ -1075,6 +1211,8 @@ func startInterruptWatcher(ctx context.Context, cleanup func()) func() {
 }
 
 // applyCLIOverrides applies CLI flag overrides to config.
+// uses opts.*Set bools (populated by markFlagsSet) to detect explicitly-set zero values
+// so that e.g. --idle-timeout 0 can disable a non-zero config value.
 func applyCLIOverrides(o opts, cfg *config.Config) {
 	if o.SkipFinalize {
 		cfg.FinalizeEnabled = false
@@ -1082,14 +1220,27 @@ func applyCLIOverrides(o opts, cfg *config.Config) {
 	if o.Worktree {
 		cfg.WorktreeEnabled = true
 	}
-	if o.Wait > 0 {
+	if o.Wait > 0 || (o.Wait == 0 && o.waitSet) {
 		cfg.WaitOnLimit = o.Wait
 		cfg.WaitOnLimitSet = true
 	}
-	if o.SessionTimeout > 0 {
+	if o.SessionTimeout > 0 || (o.SessionTimeout == 0 && o.sessionTimeoutSet) {
 		cfg.SessionTimeout = o.SessionTimeout
 		cfg.SessionTimeoutSet = true
 	}
+	if o.IdleTimeout > 0 || (o.IdleTimeout == 0 && o.idleTimeoutSet) {
+		cfg.IdleTimeout = o.IdleTimeout
+		cfg.IdleTimeoutSet = true
+	}
+}
+
+// isFlagSet returns true if the named CLI flag was explicitly provided on the command line.
+func isFlagSet(parser *flags.Parser, name string) bool {
+	if parser == nil {
+		return false
+	}
+	opt := parser.FindOptionByLongName(name)
+	return opt != nil && opt.IsSet()
 }
 
 // resolveMaxIterations returns the effective max iterations value.

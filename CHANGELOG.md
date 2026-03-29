@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.26.0 - 2026-03-25
+
+### New Features
+
+- Add idle timeout for claude sessions #250 @umputun
+- Task pause+resume via SIGQUIT #249 @umputun
+- Add InitLocal API and --init CLI flag for local config setup #245 @vkazmirchuk
+
+### Improved
+
+- Bump github.com/fatih/color from 1.18.0 to 1.19.0 #243 @app/dependabot
+
+### Fixed
+
+- Prevent false positive pattern matching on claude analysis text #251 @umputun
+
 ## v0.25.0 - 2026-03-23
 
 ### New Features
