@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.26.2 - 2026-03-31
+
+### Improved
+
+- Update README.md to link plan creation in quick start #261 @ksenks
+- Add jq to docker image afdfb47
+
 ## v0.26.1 - 2026-03-30
 
 ### Improved
