@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -1373,11 +1374,21 @@ func TestHandleEarlyFlags(t *testing.T) {
 		t.Cleanup(func() { require.NoError(t, os.Chdir(origDir)) })
 
 		// create a fake VCS script that outputs tmpDir as repo root
-		fakeVCS := filepath.Join(t.TempDir(), "fake-vcs.sh")
+		var fakeVCS string
+		if runtime.GOOS == "windows" {
+			fakeVCS = filepath.Join(t.TempDir(), "fake-vcs.cmd")
+		} else {
+			fakeVCS = filepath.Join(t.TempDir(), "fake-vcs.sh")
+		}
+
 		// resolve symlinks for consistent comparison (macOS /var -> /private/var)
 		resolvedTmpDir, resolveErr := filepath.EvalSymlinks(tmpDir)
 		require.NoError(t, resolveErr)
-		writeExecutable(t, fakeVCS, "#!/bin/sh\necho "+resolvedTmpDir+"\n")
+		if runtime.GOOS == "windows" {
+			writeExecutable(t, fakeVCS, "@echo off\necho "+resolvedTmpDir+"\n")
+		} else {
+			writeExecutable(t, fakeVCS, "#!/bin/sh\necho "+resolvedTmpDir+"\n")
+		}
 
 		cfgDir := t.TempDir()
 		require.NoError(t, os.WriteFile(filepath.Join(cfgDir, "config"),
