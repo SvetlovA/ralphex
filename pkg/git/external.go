@@ -262,7 +262,7 @@ func (e *externalBackend) fileHasChanges(path string) (bool, error) {
 	return out != "", nil
 }
 
-// hasChangesOtherThan returns the list of dirty file paths (excluding the given file).
+// hasChangesOtherThan returns the list of dirty file paths (excluding the given file, case-insensitive).
 // this includes modified/deleted tracked files, staged changes, and untracked files (excluding gitignored).
 // an empty slice means no other changes.
 func (e *externalBackend) hasChangesOtherThan(path string) ([]string, error) {
@@ -292,30 +292,12 @@ func (e *externalBackend) hasChangesOtherThan(path string) ([]string, error) {
 		}
 		// extract file path from porcelain output: "XY path" or "XY path -> newpath"
 		filePath := e.extractPathFromPorcelain(line)
-		if filePath == rel {
+		if strings.EqualFold(filePath, rel) {
 			continue
 		}
 		dirty = append(dirty, filePath)
 	}
 	return dirty, nil
-}
-
-// isIgnored checks if a path is ignored by gitignore rules.
-func (e *externalBackend) isIgnored(path string) (bool, error) {
-	cmd := cmdpkg.Wrapper{}.CommandContext(context.Background(), e.command, "check-ignore", "-q", "--", path)
-	cmd.Dir = e.path
-	err := cmd.Run()
-	if err == nil {
-		return true, nil // exit 0 = ignored
-	}
-	// exit 1 = not ignored, other codes = error
-	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) {
-		if exitErr.ExitCode() == 1 {
-			return false, nil
-		}
-	}
-	return false, fmt.Errorf("check-ignore: %w", err)
 }
 
 // add stages a file for commit.

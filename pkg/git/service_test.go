@@ -395,6 +395,34 @@ func TestService_CreateBranchForPlan(t *testing.T) {
 		require.NoError(t, err)
 		assert.Empty(t, log.logs) // no branch created
 	})
+
+	t.Run("commits plan file with case-mismatched path", func(t *testing.T) {
+		dir := setupExternalTestRepo(t)
+		log := &mockLogger{}
+		svc, err := NewService(dir, log)
+		require.NoError(t, err)
+
+		// create plan file with specific case
+		plansDir := filepath.Join(dir, "docs", "plans")
+		require.NoError(t, os.MkdirAll(plansDir, 0o750))
+		planFile := filepath.Join(plansDir, "Branch-Case.md")
+		require.NoError(t, os.WriteFile(planFile, []byte("# Branch Case Plan"), 0o600))
+
+		// call CreateBranchForPlan with lowercase path (different case)
+		lowercasePlan := filepath.Join(plansDir, "branch-case.md")
+		err = svc.CreateBranchForPlan(lowercasePlan, "master")
+		require.NoError(t, err, "should succeed despite case mismatch in plan file path")
+
+		// verify branch created (name derived from resolved on-disk case)
+		branch, err := svc.CurrentBranch()
+		require.NoError(t, err)
+		assert.Equal(t, "Branch-Case", branch)
+
+		// verify plan was committed (no uncommitted changes)
+		hasChanges, err := svc.repo.fileHasChanges(planFile)
+		require.NoError(t, err)
+		assert.False(t, hasChanges, "plan file should be committed")
+	})
 }
 
 func TestService_MovePlanToCompleted(t *testing.T) {
@@ -622,160 +650,92 @@ func TestService_EnsureHasCommits(t *testing.T) {
 	})
 }
 
-func TestService_EnsureIgnored(t *testing.T) {
-	t.Run("adds pattern to gitignore", func(t *testing.T) {
+func TestService_EnsureLocalGitignore(t *testing.T) {
+	t.Run("creates .ralphex/.gitignore", func(t *testing.T) {
 		dir := setupExternalTestRepo(t)
 		log := &mockLogger{}
 		svc, err := NewService(dir, log)
 		require.NoError(t, err)
 
-		err = svc.EnsureIgnored(".ralphex/progress/", ".ralphex/progress/progress-test.txt")
+		err = svc.EnsureLocalGitignore()
 		require.NoError(t, err)
 		assert.Len(t, log.logs, 1)
-		assert.Contains(t, log.logs[0], ".ralphex/progress/", "log message should contain pattern")
+		assert.Contains(t, log.logs[0], ".ralphex/.gitignore")
 
-		// verify pattern was added to .gitignore with unified comment
-		gitignorePath := filepath.Join(dir, ".gitignore")
+		gitignorePath := filepath.Join(dir, ".ralphex", ".gitignore")
 		content, err := os.ReadFile(gitignorePath) //nolint:gosec // test file
 		require.NoError(t, err)
-		assert.Contains(t, string(content), "# ralphex")
-		assert.NotContains(t, string(content), "# ralphex progress logs")
-		assert.Contains(t, string(content), ".ralphex/progress/")
+		assert.Equal(t, ".gitignore\nprogress/\nworktrees/\n", string(content))
 	})
 
-	t.Run("does nothing if already ignored", func(t *testing.T) {
+	t.Run("idempotent when content matches", func(t *testing.T) {
 		dir := setupExternalTestRepo(t)
-
-		// create gitignore with pattern
-		gitignorePath := filepath.Join(dir, ".gitignore")
-		err := os.WriteFile(gitignorePath, []byte(".ralphex/progress/\n"), 0o600)
-		require.NoError(t, err)
-
 		log := &mockLogger{}
 		svc, err := NewService(dir, log)
 		require.NoError(t, err)
 
-		// create probe path so git can check it
-		require.NoError(t, os.MkdirAll(filepath.Join(dir, ".ralphex", "progress"), 0o750))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, ".ralphex", "progress", "progress-test.txt"), []byte("test"), 0o600))
+		require.NoError(t, os.MkdirAll(filepath.Join(dir, ".ralphex"), 0o750))
+		require.NoError(t, os.WriteFile(
+			filepath.Join(dir, ".ralphex", ".gitignore"),
+			[]byte(".gitignore\nprogress/\nworktrees/\n"), 0o600))
 
-		err = svc.EnsureIgnored(".ralphex/progress/", ".ralphex/progress/progress-test.txt")
+		err = svc.EnsureLocalGitignore()
 		require.NoError(t, err)
-		assert.Empty(t, log.logs, "log should not be called if already ignored")
-
-		// verify gitignore wasn't modified (no duplicate pattern)
-		content, err := os.ReadFile(gitignorePath) //nolint:gosec // test file
-		require.NoError(t, err)
-		assert.Equal(t, ".ralphex/progress/\n", string(content))
+		assert.Empty(t, log.logs, "should not log when content already matches")
 	})
 
-	t.Run("creates gitignore if missing", func(t *testing.T) {
+	t.Run("overwrites stale content", func(t *testing.T) {
+		dir := setupExternalTestRepo(t)
+		log := &mockLogger{}
+		svc, err := NewService(dir, log)
+		require.NoError(t, err)
+
+		require.NoError(t, os.MkdirAll(filepath.Join(dir, ".ralphex"), 0o750))
+		require.NoError(t, os.WriteFile(
+			filepath.Join(dir, ".ralphex", ".gitignore"),
+			[]byte("old-content\n"), 0o600))
+
+		err = svc.EnsureLocalGitignore()
+		require.NoError(t, err)
+		assert.Len(t, log.logs, 1)
+
+		content, err := os.ReadFile(filepath.Join(dir, ".ralphex", ".gitignore")) //nolint:gosec // test file
+		require.NoError(t, err)
+		assert.Equal(t, ".gitignore\nprogress/\nworktrees/\n", string(content))
+	})
+
+	t.Run("creates .ralphex dir if missing", func(t *testing.T) {
 		dir := setupExternalTestRepo(t)
 		svc, err := NewService(dir, noopServiceLogger())
 		require.NoError(t, err)
 
-		// verify no .gitignore exists
-		gitignorePath := filepath.Join(dir, ".gitignore")
-		_, err = os.Stat(gitignorePath)
+		_, err = os.Stat(filepath.Join(dir, ".ralphex"))
 		assert.True(t, os.IsNotExist(err))
 
-		err = svc.EnsureIgnored("*.log", "test.log")
+		err = svc.EnsureLocalGitignore()
 		require.NoError(t, err)
 
-		// verify .gitignore was created
-		content, err := os.ReadFile(gitignorePath) //nolint:gosec // test file
+		info, err := os.Stat(filepath.Join(dir, ".ralphex"))
 		require.NoError(t, err)
-		assert.Contains(t, string(content), "*.log")
+		assert.True(t, info.IsDir())
 	})
 
-	t.Run("appends to existing gitignore", func(t *testing.T) {
+	t.Run("does not modify root .gitignore", func(t *testing.T) {
 		dir := setupExternalTestRepo(t)
 		svc, err := NewService(dir, noopServiceLogger())
 		require.NoError(t, err)
 
-		// create gitignore with existing content
-		gitignorePath := filepath.Join(dir, ".gitignore")
-		err = os.WriteFile(gitignorePath, []byte("*.log\n"), 0o600)
+		rootGitignore := filepath.Join(dir, ".gitignore")
+		_, err = os.Stat(rootGitignore)
+		rootExistedBefore := !os.IsNotExist(err)
+
+		err = svc.EnsureLocalGitignore()
 		require.NoError(t, err)
 
-		err = svc.EnsureIgnored("*.tmp", "test.tmp")
-		require.NoError(t, err)
-
-		// verify both patterns exist
-		content, err := os.ReadFile(gitignorePath) //nolint:gosec // test file
-		require.NoError(t, err)
-		assert.Contains(t, string(content), "*.log")
-		assert.Contains(t, string(content), "*.tmp")
-	})
-
-	t.Run("does not duplicate comment on second call", func(t *testing.T) {
-		dir := setupExternalTestRepo(t)
-		svc, err := NewService(dir, noopServiceLogger())
-		require.NoError(t, err)
-
-		// first call adds comment + pattern
-		err = svc.EnsureIgnored(".ralphex/progress/", ".ralphex/progress/progress-test.txt")
-		require.NoError(t, err)
-
-		gitignorePath := filepath.Join(dir, ".gitignore")
-		content, err := os.ReadFile(gitignorePath) //nolint:gosec // test file
-		require.NoError(t, err)
-		assert.Equal(t, 1, strings.Count(string(content), "# ralphex"), "first call should add comment once")
-		assert.Contains(t, string(content), ".ralphex/progress/")
-
-		// second call with different pattern should not add comment again
-		err = svc.EnsureIgnored(".ralphex/worktrees/", ".ralphex/worktrees/test-branch")
-		require.NoError(t, err)
-
-		content, err = os.ReadFile(gitignorePath) //nolint:gosec // test file
-		require.NoError(t, err)
-		assert.Equal(t, 1, strings.Count(string(content), "# ralphex"), "second call should not duplicate comment")
-		assert.Contains(t, string(content), ".ralphex/progress/")
-		assert.Contains(t, string(content), ".ralphex/worktrees/")
-	})
-
-	t.Run("recognizes legacy header from older versions", func(t *testing.T) {
-		dir := setupExternalTestRepo(t)
-		svc, err := NewService(dir, noopServiceLogger())
-		require.NoError(t, err)
-
-		// simulate .gitignore from older ralphex version with legacy header
-		gitignorePath := filepath.Join(dir, ".gitignore")
-		err = os.WriteFile(gitignorePath, []byte("# ralphex progress logs\n.ralphex/progress/\n"), 0o600)
-		require.NoError(t, err)
-
-		// add worktrees pattern — should reuse legacy header, not add new one
-		err = svc.EnsureIgnored(".ralphex/worktrees/", ".ralphex/worktrees/test-branch")
-		require.NoError(t, err)
-
-		content, err := os.ReadFile(gitignorePath) //nolint:gosec // test file
-		require.NoError(t, err)
-		assert.NotContains(t, string(content), "\n# ralphex\n", "should not add new header when legacy exists")
-		assert.Contains(t, string(content), ".ralphex/worktrees/")
-	})
-
-	t.Run("handles file without trailing newline", func(t *testing.T) {
-		dir := setupExternalTestRepo(t)
-		svc, err := NewService(dir, noopServiceLogger())
-		require.NoError(t, err)
-
-		// create .gitignore with ralphex header but no trailing newline
-		gitignorePath := filepath.Join(dir, ".gitignore")
-		err = os.WriteFile(gitignorePath, []byte("# ralphex\n.ralphex/progress/"), 0o600) // no trailing \n
-		require.NoError(t, err)
-
-		// add second pattern — should not corrupt the last line
-		err = svc.EnsureIgnored(".ralphex/worktrees/", ".ralphex/worktrees/test-branch")
-		require.NoError(t, err)
-
-		content, err := os.ReadFile(gitignorePath) //nolint:gosec // test file
-		require.NoError(t, err)
-		for line := range strings.SplitSeq(string(content), "\n") {
-			// each non-empty line should be a complete entry, not concatenated
-			assert.NotContains(t, line, ".ralphex/progress/.ralphex/worktrees/",
-				"patterns should not be concatenated on the same line")
+		if !rootExistedBefore {
+			_, err = os.Stat(rootGitignore)
+			assert.True(t, os.IsNotExist(err), "root .gitignore should not be created")
 		}
-		assert.Contains(t, string(content), ".ralphex/worktrees/")
 	})
 }
 
@@ -1202,6 +1162,39 @@ func TestService_CommitPlanFile(t *testing.T) {
 		// cleanup
 		require.NoError(t, svc.RemoveWorktree(wtPath))
 	})
+
+	t.Run("commits plan file with case-mismatched path", func(t *testing.T) {
+		dir := setupExternalTestRepo(t)
+		log := &mockLogger{}
+		svc, err := NewService(dir, log)
+		require.NoError(t, err)
+
+		// create plan file with specific case on master
+		plansDir := filepath.Join(dir, "docs", "plans")
+		require.NoError(t, os.MkdirAll(plansDir, 0o750))
+		planFile := filepath.Join(plansDir, "Case-Test.md")
+		require.NoError(t, os.WriteFile(planFile, []byte("# Case Test Plan"), 0o600))
+
+		// create worktree from master (plan is copied in with original case)
+		wtPath, planNeedsCommit, err := svc.CreateWorktreeForPlan(planFile, "master")
+		require.NoError(t, err)
+		assert.True(t, planNeedsCommit)
+
+		// open worktree git service and commit plan with lowercase path (different case)
+		wtSvc, err := NewService(wtPath, log)
+		require.NoError(t, err)
+		lowercasePlan := filepath.Join(plansDir, "case-test.md")
+		err = wtSvc.CommitPlanFile(lowercasePlan, svc.Root())
+		require.NoError(t, err, "commit should succeed despite case mismatch")
+
+		// verify commit succeeded on the feature branch (branch name derived from original-case plan file)
+		wtBranch, err := wtSvc.CurrentBranch()
+		require.NoError(t, err)
+		assert.Equal(t, "Case-Test", wtBranch)
+
+		// cleanup
+		require.NoError(t, svc.RemoveWorktree(wtPath))
+	})
 }
 
 func TestService_RemoveWorktree(t *testing.T) {
@@ -1263,84 +1256,6 @@ func TestService_RemoveWorktree(t *testing.T) {
 
 		// branch should still exist
 		assert.True(t, svc.repo.branchExists("preserve-branch"))
-	})
-}
-
-func TestService_CommitIgnoreChanges(t *testing.T) {
-	t.Run("commits dirty gitignore", func(t *testing.T) {
-		dir := setupExternalTestRepo(t)
-		log := &mockLogger{}
-		svc, err := NewService(dir, log)
-		require.NoError(t, err)
-
-		// add a pattern to .gitignore (makes it dirty)
-		err = svc.EnsureIgnored(".ralphex/progress/", ".ralphex/progress/progress-test.txt")
-		require.NoError(t, err)
-
-		// verify .gitignore is dirty
-		changed, err := svc.repo.fileHasChanges(".gitignore")
-		require.NoError(t, err)
-		assert.True(t, changed)
-
-		// commit the changes
-		err = svc.CommitIgnoreChanges()
-		require.NoError(t, err)
-
-		// verify .gitignore is clean
-		changed, err = svc.repo.fileHasChanges(".gitignore")
-		require.NoError(t, err)
-		assert.False(t, changed)
-
-		assert.GreaterOrEqual(t, len(log.logs), 2, "should have log for EnsureIgnored and CommitIgnoreChanges")
-	})
-
-	t.Run("no-op when gitignore is clean", func(t *testing.T) {
-		dir := setupExternalTestRepo(t)
-		log := &mockLogger{}
-		svc, err := NewService(dir, log)
-		require.NoError(t, err)
-
-		err = svc.CommitIgnoreChanges()
-		require.NoError(t, err)
-		assert.Empty(t, log.logs, "should not log when nothing to commit")
-	})
-
-	t.Run("no-op when gitignore does not exist", func(t *testing.T) {
-		dir := setupExternalTestRepo(t)
-		// ensure no .gitignore exists
-		_ = os.Remove(filepath.Join(dir, ".gitignore"))
-
-		log := &mockLogger{}
-		svc, err := NewService(dir, log)
-		require.NoError(t, err)
-
-		err = svc.CommitIgnoreChanges()
-		require.NoError(t, err)
-		assert.Empty(t, log.logs)
-	})
-
-	t.Run("does not commit pre-staged files", func(t *testing.T) {
-		dir := setupExternalTestRepo(t)
-		log := &mockLogger{}
-		svc, err := NewService(dir, log)
-		require.NoError(t, err)
-
-		// create and stage an unrelated file
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "other.txt"), []byte("data"), 0o600))
-		require.NoError(t, svc.repo.add("other.txt"))
-
-		// make .gitignore dirty
-		err = svc.EnsureIgnored(".ralphex/progress/", ".ralphex/progress/progress-test.txt")
-		require.NoError(t, err)
-
-		// commit should only commit .gitignore, not other.txt
-		err = svc.CommitIgnoreChanges()
-		require.NoError(t, err)
-
-		// other.txt should still have staged changes (not committed)
-		changed, err := svc.repo.fileHasChanges("other.txt")
-		require.NoError(t, err)
-		assert.True(t, changed, "other.txt should still be staged/dirty, not committed")
 	})
 }
 
@@ -1527,23 +1442,6 @@ func TestService_CommitWithTrailer(t *testing.T) {
 		assert.Contains(t, out, "Co-authored-by: ralphex <noreply@ralphex.com>")
 	})
 
-	t.Run("trailer in CommitIgnoreChanges", func(t *testing.T) {
-		dir := setupExternalTestRepo(t)
-		svc, err := NewService(dir, noopServiceLogger())
-		require.NoError(t, err)
-		svc.SetCommitTrailer("Signed-off-by: bot")
-
-		// create a .gitignore with changes
-		require.NoError(t, os.WriteFile(filepath.Join(dir, ".gitignore"), []byte("*.log\n"), 0o600))
-
-		err = svc.CommitIgnoreChanges()
-		require.NoError(t, err)
-
-		out := runGit(t, dir, "log", "-1", "--format=%B")
-		assert.Contains(t, out, "add ralphex entries to .gitignore")
-		assert.Contains(t, out, "Signed-off-by: bot")
-	})
-
 	t.Run("trailer in MovePlanToCompleted", func(t *testing.T) {
 		dir := setupExternalTestRepo(t)
 		svc, err := NewService(dir, noopServiceLogger())
@@ -1565,4 +1463,40 @@ func TestService_CommitWithTrailer(t *testing.T) {
 		assert.Contains(t, out, "move completed plan: move-trailer.md")
 		assert.Contains(t, out, "Signed-off-by: test")
 	})
+}
+
+func TestService_resolveFilesystemCase(t *testing.T) {
+	dir := setupExternalTestRepo(t)
+	svc, err := NewService(dir, noopServiceLogger())
+	require.NoError(t, err)
+
+	tests := []struct {
+		name     string
+		setup    func(t *testing.T, dir string) string // returns input path
+		wantBase string                                // expected basename in result
+	}{
+		{name: "returns actual case when basename differs", setup: func(t *testing.T, dir string) string {
+			require.NoError(t, os.WriteFile(filepath.Join(dir, "Foo-Bar.md"), []byte("x"), 0o600))
+			return filepath.Join(dir, "foo-bar.md") // different case
+		}, wantBase: "Foo-Bar.md"},
+		{name: "returns original path when no match", setup: func(_ *testing.T, dir string) string {
+			return filepath.Join(dir, "nonexistent.md")
+		}, wantBase: "nonexistent.md"},
+		{name: "returns original path when file matches exactly", setup: func(t *testing.T, dir string) string {
+			require.NoError(t, os.WriteFile(filepath.Join(dir, "exact.md"), []byte("x"), 0o600))
+			return filepath.Join(dir, "exact.md")
+		}, wantBase: "exact.md"},
+		{name: "returns original path when directory unreadable", setup: func(_ *testing.T, _ string) string {
+			return "/nonexistent-dir-abc123/file.md"
+		}, wantBase: "file.md"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			input := tt.setup(t, tmpDir)
+			got := svc.resolveFilesystemCase(input)
+			assert.Equal(t, tt.wantBase, filepath.Base(got))
+		})
+	}
 }

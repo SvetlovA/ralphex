@@ -183,7 +183,7 @@ The `--network` flag (or `RALPHEX_DOCKER_NETWORK` env var) sets the Docker netwo
 ### Git Package API
 
 Single public entry point: `git.NewService(path, logger, vcsCmd...) (*Service, error)`
-- All git operations are methods on `Service` (CreateBranchForPlan, CreateWorktreeForPlan, MovePlanToCompleted, EnsureIgnored, etc.)
+- All git operations are methods on `Service` (CreateBranchForPlan, CreateWorktreeForPlan, MovePlanToCompleted, EnsureLocalGitignore, etc.)
 - `Logger` interface for dependency injection, compatible with `*color.Color`
 - Uses `backend` interface internally, implemented by `externalBackend` which shells out to the configured VCS command
 - Optional `vcsCmd` parameter overrides the default `"git"` command (e.g., path to `hg2git.sh` translation script)
@@ -202,10 +202,11 @@ Key files:
 - Worktree auto-removed on completion, failure, or SIGINT; branch preserved for PR
 - Only active for `ModeFull` and `ModeTasksOnly` (review/plan/external modes skip worktree)
 - `runWithWorktree()` in `cmd/ralphex/main.go` encapsulates the full lifecycle
+- Case-insensitive path handling: `CreateBranchForPlan()`, `CreateWorktreeForPlan()`, and `CommitPlanFile()` resolve plan file paths to actual on-disk case via `resolveFilesystemCase()` to handle macOS APFS case-insensitive filesystems. `hasChangesOtherThan()` uses case-insensitive comparison for plan file exclusion
 
 Key files:
 - `cmd/ralphex/main.go` - `runWithWorktree()`, `selectAndExecutePlan()`, interrupt cleanup
-- `pkg/git/service.go` - `CreateWorktreeForPlan()`, `CommitPlanFile()`, `RemoveWorktree()`
+- `pkg/git/service.go` - `CreateWorktreeForPlan()`, `CommitPlanFile()`, `RemoveWorktree()`, `resolveFilesystemCase()`
 - `pkg/git/external.go` - `addWorktree()`, `removeWorktree()`, `pruneWorktrees()` (unexported backend methods)
 
 ### Plan Creation Mode
@@ -339,12 +340,14 @@ Implementation:
 
 ### Agent System
 
-5 default agents are installed on first run to `~/.config/ralphex/agents/`:
+5 default agents are installed on first run to `~/.config/ralphex/agents/` as commented-out templates:
 - `implementation.txt` - verifies code achieves stated goals
 - `quality.txt` - reviews for bugs, security issues, race conditions
 - `documentation.txt` - checks if docs need updates
 - `simplification.txt` - detects over-engineering
 - `testing.txt` - reviews test coverage and quality
+
+**Loading behavior:** agents are loaded with per-file fallback: local `.ralphex/agents/` → global `~/.config/ralphex/agents/` → embedded default. The 5 embedded agents are always the baseline — deleting an agent file from disk does not disable it, the embedded version is used as fallback. To disable a specific agent, remove its `{{agent:name}}` reference from the prompt files (`review_first.txt`, `review_second.txt`), not the agent file itself.
 
 **Frontmatter options:** Agent files support optional YAML frontmatter (`---` delimited) for per-agent model and subagent type:
 - `model: haiku|sonnet|opus` — Claude model for this agent

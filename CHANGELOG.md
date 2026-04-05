@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.26.2 - 2026-03-31
+
+### Improved
+
+- Update README.md to link plan creation in quick start #261 @ksenks
+- Add jq to docker image afdfb47
+
+## v0.26.1 - 2026-03-30
+
+### Improved
+
+- Unify gitignore handling and fix write error reporting #252 @vkazmirchuk
+- Unify startup header and completion footer display 9af32cd
+- Revert coveralls → codecov, switch back to coveralls 63d8a7f
+
+### Fixed
+
+- Use .ralphex/.gitignore instead of modifying root .gitignore #260 @rsolmano
+
 ## v0.26.0 - 2026-03-25
 
 ### New Features

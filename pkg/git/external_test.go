@@ -523,39 +523,27 @@ func TestExternalBackend_HasChangesOtherThan(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, []string{"README.md"}, dirty)
 	})
-}
 
-func TestExternalBackend_IsIgnored(t *testing.T) {
-	t.Run("returns false for non-ignored file", func(t *testing.T) {
+	t.Run("excludes plan file with different case", func(t *testing.T) {
 		dir := setupExternalTestRepo(t)
 		eb, err := newExternalBackend(dir, "git")
 		require.NoError(t, err)
 
-		ignored, err := eb.isIgnored("README.md")
-		require.NoError(t, err)
-		assert.False(t, ignored)
-	})
+		// create and commit plan file with specific case
+		plansDir := filepath.Join(dir, "docs", "plans")
+		require.NoError(t, os.MkdirAll(plansDir, 0o750))
+		planFile := filepath.Join(plansDir, "My-Plan.md")
+		require.NoError(t, os.WriteFile(planFile, []byte("# Plan\n"), 0o600))
+		runGit(t, dir, "add", "docs/plans/My-Plan.md")
+		runGit(t, dir, "commit", "-m", "add plan")
 
-	t.Run("returns true for ignored pattern", func(t *testing.T) {
-		dir := setupExternalTestRepo(t)
-		require.NoError(t, os.WriteFile(filepath.Join(dir, ".gitignore"), []byte("progress-*.txt\n"), 0o600))
+		// modify the plan file to make it dirty
+		require.NoError(t, os.WriteFile(planFile, []byte("# Plan\nupdated content\n"), 0o600))
 
-		eb, err := newExternalBackend(dir, "git")
+		// call with lowercase path — should still exclude it
+		dirty, err := eb.hasChangesOtherThan(filepath.Join("docs", "plans", "my-plan.md"))
 		require.NoError(t, err)
-
-		ignored, err := eb.isIgnored("progress-test.txt")
-		require.NoError(t, err)
-		assert.True(t, ignored)
-	})
-
-	t.Run("returns false for no gitignore", func(t *testing.T) {
-		dir := setupExternalTestRepo(t)
-		eb, err := newExternalBackend(dir, "git")
-		require.NoError(t, err)
-
-		ignored, err := eb.isIgnored("somefile.txt")
-		require.NoError(t, err)
-		assert.False(t, ignored)
+		assert.Empty(t, dirty, "plan file with different case should be excluded")
 	})
 }
 
@@ -1020,8 +1008,5 @@ func TestExternalBackend_CustomCommand(t *testing.T) {
 		require.NoError(t, err)
 
 		_ = eb.getDefaultBranch()
-
-		_, err = eb.isIgnored("README.md")
-		require.NoError(t, err)
 	})
 }

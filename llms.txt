@@ -98,7 +98,7 @@ Configuration directory: `~/.config/ralphex/` (override with `--config-dir` or `
 
 **Prompt files** (`~/.config/ralphex/prompts/`): `task.txt`, `review_first.txt`, `review_second.txt`, `codex.txt`, `codex_review.txt`, `custom_review.txt`, `custom_eval.txt`, `make_plan.txt`, `finalize.txt`
 
-**Agent files** (`~/.config/ralphex/agents/`): Custom review agents referenced via `{{agent:name}}` in prompts
+**Agent files** (`~/.config/ralphex/agents/`): Custom review agents referenced via `{{agent:name}}` in prompts. On first run, 5 default agents are installed as commented-out templates. Agents use per-file fallback (local → global → embedded) — embedded defaults are always the baseline, so deleting an agent file does not disable it. To disable a specific agent, remove its `{{agent:name}}` reference from the prompt files, not the agent file itself
 
 **Template variables** (available in prompt and agent files):
 - `{{PLAN_FILE}}` - path to plan file
