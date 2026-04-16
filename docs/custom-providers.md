@@ -80,6 +80,67 @@ Command execution events are skipped by default because codex reads many files o
 
 The script uses `jq` for JSON parsing, which is included in ralphex Docker images and available on most systems.
 
+## GitHub Copilot CLI wrapper (included example)
+
+The repository includes a wrapper at `scripts/copilot-as-claude/copilot-as-claude.sh` that keeps ralphex on the existing `claude_command` / `claude_args` path by translating GitHub Copilot CLI JSONL events into Claude stream-json output.
+
+Unlike the Gemini wrapper, Copilot already has a native non-interactive JSONL mode. Unlike OpenCode, it also has native permission flags, so the wrapper can lean on Copilot's own autonomy controls instead of inventing a wrapper-specific config layer. The Copilot wrapper mainly handles prompt ingestion from stdin, event translation, review-prompt adaptation, stderr passthrough, and fallback `result` emission.
+
+### Setup
+
+```ini
+# in ~/.config/ralphex/config or .ralphex/config
+claude_command = /path/to/scripts/copilot-as-claude/copilot-as-claude.sh
+claude_args =
+```
+
+### Authentication
+
+Authenticate Copilot using either:
+
+- `copilot login` (OAuth device flow with stored credentials)
+- `COPILOT_GITHUB_TOKEN`
+- `GH_TOKEN`
+- `GITHUB_TOKEN`
+
+Copilot checks the token variables in the order above. Fine-grained PATs must include the `Copilot Requests` permission. Classic PATs (`ghp_`) are not supported by the Copilot CLI.
+
+### Environment variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `COPILOT_MODEL` | (Copilot CLI default) | Model to use |
+| `COPILOT_GITHUB_TOKEN` | unset | Preferred auth token for automation |
+| `GH_TOKEN` | unset | GitHub CLI token fallback |
+| `GITHUB_TOKEN` | unset | Final auth token fallback |
+| `GH_HOST` | `github.com` | Alternate GitHub host for Enterprise Cloud data residency |
+
+### Why this wrapper uses Copilot JSONL mode
+
+The wrapper runs Copilot with `-s --output-format json --stream on` so it can consume native JSONL events instead of scraping terminal text. It emits completed assistant messages rather than token deltas to keep ralphex output readable, while still using explicit completion events to map into Claude `result` output and echoing stderr back into the stream for existing error and limit detection.
+
+### Permission model
+
+The wrapper uses Copilot's native autonomy flags: `--autopilot --no-ask-user --allow-all`.
+
+- `--autopilot` enables the multi-step autonomous execution required for unattended task/review phases
+- `--no-ask-user` prevents Copilot from pausing the run with follow-up questions
+- `--allow-all` enables tool, path, and URL permissions together, matching ralphex's unattended task/review model
+
+For ralphex plan creation, the wrapper instead uses `--autopilot --allow-all` and intentionally leaves off `--no-ask-user`. Plan mode is supposed to surface clarification through `<<<RALPHEX:QUESTION>>>` signals, so the wrapper avoids the unattended question-suppression path and instructs Copilot to use signal-based questions instead of the native `ask_user` tool. It intentionally avoids Copilot's native `--mode plan`, because that tended to re-draft after user acceptance instead of writing the accepted plan and emitting `PLAN_READY`.
+
+GitHub's programmatic autopilot guidance uses the same core pattern: "Use the `--allow-all` (or `--yolo`) option" together with `--autopilot`, optionally adding `--max-autopilot-continues` for a safety cap in CI or scripts.
+
+If you need a narrower policy, fork the wrapper and replace `--allow-all` with explicit `--allow-tool`, `--allow-url`, or related permission flags.
+
+### How it differs from other included wrappers
+
+| Wrapper | Transport | Permissions | Copilot-specific difference |
+|---|---|---|---|
+| Codex | Native JSONL | Codex sandbox/env flags | Copilot uses native `--autopilot`/`--allow-all`/`--no-ask-user` for task/review runs, switches to `--autopilot --allow-all` for plan creation, and adds adapters for Claude Task-tool wording plus signal-based plan questions |
+| OpenCode | Native JSONL | Merges `OPENCODE_CONFIG_CONTENT` with auto-allow permissions | Copilot uses built-in permission flags rather than JSON config merging |
+| Gemini | Plain text | Gemini CLI settings outside the wrapper | Copilot streams structured JSONL events, so the wrapper can emit completed assistant messages and terminal events without scraping plain text lines |
+
 ## OpenCode wrapper (included example)
 
 The repository includes a wrapper at `scripts/opencode/opencode-as-claude.sh` that translates OpenCode JSONL events to Claude stream-json format. It uses `jq` for JSON parsing and auto-sets permission auto-allow (`{"permission":{"*":"allow"}}`) for autonomous execution.
