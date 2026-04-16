@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.27.0 - 2026-04-16
+
+### New Features
+
+- Add GitHub Copilot CLI support #275 @AOrlov
+- Add per-phase Claude model configuration #272 @dwilberger
+
+### Improved
+
+- Skip post-codex claude review when no findings #282 @umputun
+- Update all dependencies 2bc0008
+
+### Fixed
+
+- Reduce macOS credential cleanup race and fail fast on missing creds 33390d9
+
 ## v0.26.3 - 2026-04-08
 
 ### Improved
