@@ -348,7 +348,7 @@ ralphex --docker --dry-run   # verify socket mount in command
 
 **AWS Bedrock support:**
 
-When `--claude-provider bedrock` or `RALPHEX_CLAUDE_PROVIDER=bedrock` is set:
+When `--claude-provider=bedrock` or `RALPHEX_CLAUDE_PROVIDER=bedrock` is set:
 - Keychain credential extraction is skipped (not needed for Bedrock auth)
 - AWS credentials are automatically exported from `AWS_PROFILE` via `aws configure export-credentials`
 - Required Bedrock env vars are passed to container: `CLAUDE_CODE_USE_BEDROCK`, `AWS_REGION`, credentials
@@ -357,13 +357,13 @@ Required environment for Bedrock:
 - `AWS_REGION` - AWS region where Bedrock is enabled
 - `AWS_PROFILE` or `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` - authentication
 
-Note: `CLAUDE_CODE_USE_BEDROCK=1` is automatically set when using `--claude-provider bedrock`.
+Note: `CLAUDE_CODE_USE_BEDROCK=1` is automatically set when using `--claude-provider=bedrock`.
 
 ```bash
 # with AWS profile (credentials exported automatically)
 export AWS_PROFILE=my-bedrock-profile
 export AWS_REGION=us-east-1
-ralphex --claude-provider bedrock docs/plans/feature.md
+ralphex --claude-provider=bedrock docs/plans/feature.md
 
 # or use env var for session-wide setting
 export RALPHEX_CLAUDE_PROVIDER=bedrock
@@ -496,7 +496,7 @@ RALPHEX_IMAGE=my-ralphex ralphex docs/plans/feature.md
 
 Example with custom port:
 ```bash
-RALPHEX_PORT=3000 ralphex --serve --port 3000 docs/plans/feature.md
+RALPHEX_PORT=3000 ralphex --serve --port=3000 docs/plans/feature.md
 ```
 
 ## Usage
@@ -542,19 +542,22 @@ ralphex --max-external-iterations=5 docs/plans/feature.md
 ralphex --review-patience=3 docs/plans/feature.md
 
 # wait and retry on rate limit (instead of exiting)
-ralphex --wait 1h docs/plans/feature.md
+ralphex --wait=1h docs/plans/feature.md
+
+# use different models for tasks vs reviews (e.g., opus for tasks, sonnet for reviews)
+ralphex --task-model=opus --review-model=sonnet docs/plans/feature.md
 
 # set per-session timeout to kill hanging claude sessions
-ralphex --session-timeout 30m docs/plans/feature.md
+ralphex --session-timeout=30m docs/plans/feature.md
 
 # kill claude session when no output for 5 minutes (idle detection)
-ralphex --idle-timeout 5m docs/plans/feature.md
+ralphex --idle-timeout=5m docs/plans/feature.md
 
 # with web dashboard
 ralphex --serve docs/plans/feature.md
 
 # web dashboard on custom port
-ralphex --serve --port 3000 docs/plans/feature.md
+ralphex --serve --port=3000 docs/plans/feature.md
 ```
 
 ### Options
@@ -570,6 +573,8 @@ ralphex --serve --port 3000 docs/plans/feature.md
 | `-t, --tasks-only` | Run only task phase, skip all reviews | false |
 | `-b, --base-ref` | Override default branch for review diffs (branch name or commit hash) | auto-detect |
 | `--skip-finalize` | Skip finalize step even if enabled in config | false |
+| `--task-model` | Model for task execution as `model[:effort]` (e.g., `opus`, `opus:high`, `:medium`). Effort values: `low`, `medium`, `high`, `xhigh`, `max`. Appended as `--model <m>` and/or `--effort <e>` to `claude_command`; custom wrappers may ignore or implement the flags | empty |
+| `--review-model` | Model for review phases as `model[:effort]` (falls back to `--task-model`). Same syntax and wrapper behavior as `--task-model` | empty |
 | `--wait` | Wait duration before retrying on rate limit (e.g., `1h`, `30m`) | disabled |
 | `--session-timeout` | Per-session timeout for claude (e.g., `30m`, `1h`). Kills hanging sessions | disabled |
 | `--idle-timeout` | Kill claude session when no output for specified duration (e.g., `5m`). Resets on each output line | disabled |
@@ -800,6 +805,8 @@ Use `--config-dir` or `RALPHEX_CONFIG_DIR` to override the global config locatio
 |--------|-------------|---------|
 | `claude_command` | Claude CLI command | `claude` |
 | `claude_args` | Claude CLI arguments | `--dangerously-skip-permissions --output-format stream-json --verbose` |
+| `task_model` | Model for task execution as `model[:effort]` (e.g., `opus`, `opus:high`, `:medium`). Effort: `low`, `medium`, `high`, `xhigh`, `max`. Appended as `--model <m>` and/or `--effort <e>` to `claude_command`; custom wrappers may ignore or implement the flags | empty |
+| `review_model` | Model for review phases as `model[:effort]`. Falls back to `task_model` if empty. Same syntax and wrapper behavior as `task_model` | empty |
 | `codex_enabled` | Enable codex review phase | `true` |
 | `codex_command` | Codex CLI command | `codex` |
 | `codex_model` | Codex model ID | `gpt-5.4` |
@@ -933,19 +940,39 @@ When running ralphex in Docker, your script must be accessible inside the contai
 
 ### Using Alternative Providers for Claude Phases
 
-The `claude_command` and `claude_args` config options let you replace Claude Code with any CLI that produces compatible `stream-json` output. This means codex, Gemini CLI, local LLMs, or any other tool can drive task execution and review phases — you just need a wrapper script that translates the tool's output format.
+The `claude_command` and `claude_args` config options let you replace Claude Code with any CLI that produces compatible `stream-json` output. This means codex, GitHub Copilot CLI, Gemini CLI, local LLMs, or any other tool can drive task execution and review phases — you just need a wrapper script that translates the tool's output format.
 
-A working example is included: [`scripts/codex-as-claude/codex-as-claude.sh`](https://github.com/umputun/ralphex/blob/master/scripts/codex-as-claude/codex-as-claude.sh) wraps codex to produce Claude-compatible events. To use it:
+Working examples are included:
+
+- [`scripts/codex-as-claude/codex-as-claude.sh`](https://github.com/umputun/ralphex/blob/master/scripts/codex-as-claude/codex-as-claude.sh) wraps codex to produce Claude-compatible events
+- [`scripts/copilot-as-claude/copilot-as-claude.sh`](https://github.com/umputun/ralphex/blob/master/scripts/copilot-as-claude/copilot-as-claude.sh) wraps GitHub Copilot CLI and translates its native JSONL stream into Claude-compatible events
+
+To use the included Copilot wrapper:
 
 ```ini
 # in ~/.config/ralphex/config or .ralphex/config
-claude_command = /path/to/codex-as-claude.sh
+claude_command = /path/to/scripts/copilot-as-claude/copilot-as-claude.sh
+claude_args =
+```
+
+Authenticate with `copilot login` or set one of `COPILOT_GITHUB_TOKEN`, `GH_TOKEN`, or `GITHUB_TOKEN`. Set `COPILOT_MODEL` to choose the model.
+The wrapper runs Copilot in native autopilot mode with `--autopilot --no-ask-user --allow-all` so task and review phases can continue across multiple model turns without manual intervention.
+For ralphex plan creation, it switches to `--autopilot --allow-all` so clarification can surface through `<<<RALPHEX:QUESTION>>>` signals instead of being suppressed by the unattended question path.
+
+To use the included codex wrapper:
+
+```ini
+# in ~/.config/ralphex/config or .ralphex/config
+claude_command = /path/to/scripts/codex-as-claude/codex-as-claude.sh
 claude_args =
 ```
 
 Setting `claude_args` to empty is optional. Note that default Claude flags (`--dangerously-skip-permissions`, `--output-format stream-json`, `--verbose`) may still be passed due to config fallback behavior. Wrapper scripts should ignore unknown flags gracefully — the included script does this via its `*) shift ;;` catch-all.
 
-The wrapper supports environment variables:
+The included Codex and Copilot wrappers require `jq` on `PATH` for JSON translation.
+
+Provider-specific environment variables:
+- `COPILOT_MODEL`, `COPILOT_GITHUB_TOKEN`, `GH_TOKEN`, `GITHUB_TOKEN` - Copilot model selection and headless authentication
 - `CODEX_MODEL` - codex model to use (default: codex default)
 - `CODEX_SANDBOX` - sandbox mode (default: `danger-full-access`)
 - `CODEX_VERBOSE` - set to `1` to include command execution output in the stream (default: `0`, only agent messages are shown)
@@ -1064,7 +1091,7 @@ This works because ralphex only checks for the `ALL_TASKS_DONE` signal — it do
 Yes. Pro plans hit rate limits more frequently. Use `--wait` to pause and retry automatically instead of exiting:
 
 ```bash
-ralphex --wait 1h docs/plans/feature.md
+ralphex --wait=1h docs/plans/feature.md
 ```
 
 When a rate limit is detected, ralphex waits the specified duration and retries. Execution takes longer but completes unattended. You can also set `wait_on_limit = 1h` in config to make it the default.
@@ -1080,16 +1107,27 @@ claude_args = --force --output-format stream-json
 
 Key differences: `agent` command (not `claude`), `--force` flag (not `--dangerously-skip-permissions`). Stream format and signals are compatible. *Note: this is community-tested, not officially supported. Compatibility depends on Cursor maintaining Claude Code compatibility.*
 
-**Can I use codex (or another model) for task execution instead of Claude?**
+**Can I use codex, GitHub Copilot CLI, or another model for task execution instead of Claude?**
 
-Yes. Use the included wrapper script that translates codex output to Claude's stream-json format:
+Yes. Use one of the included wrapper scripts that translate provider output to Claude's stream-json format:
 
 ```ini
-claude_command = /path/to/codex-as-claude.sh
+claude_command = /path/to/scripts/copilot-as-claude/copilot-as-claude.sh
 claude_args =
 ```
 
-Set `CODEX_MODEL` env var to choose the model. See [Using Alternative Providers](#using-alternative-providers-for-claude-phases) and [custom providers documentation](https://github.com/umputun/ralphex/blob/master/docs/custom-providers.md) for writing wrappers for other tools.
+For Copilot, authenticate with `copilot login` or one of `COPILOT_GITHUB_TOKEN`, `GH_TOKEN`, or `GITHUB_TOKEN`, and set `COPILOT_MODEL` if you want to override the default model.
+The included Copilot wrapper runs Copilot in native autopilot mode with `--autopilot --no-ask-user --allow-all` for unattended task and review execution.
+For ralphex plan creation, it switches to `--autopilot --allow-all` so clarification can surface through `<<<RALPHEX:QUESTION>>>` signals instead of being suppressed by the unattended question path.
+
+Codex works the same way through its wrapper:
+
+```ini
+claude_command = /path/to/scripts/codex-as-claude/codex-as-claude.sh
+claude_args =
+```
+
+Set `CODEX_MODEL` env var to choose the model. See [Using Alternative Providers](#using-alternative-providers-for-claude-phases) and [custom providers documentation](https://github.com/umputun/ralphex/blob/master/docs/custom-providers.md) for the included Copilot example and for writing wrappers for other tools.
 
 **How do I use multiple Claude accounts?**
 

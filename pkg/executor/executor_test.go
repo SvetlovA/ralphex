@@ -456,6 +456,34 @@ func TestSplitArgs(t *testing.T) {
 	}
 }
 
+func TestStripFlag(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		flag string
+		want []string
+	}{
+		{name: "removes flag and value", args: []string{"--verbose", "--model", "opus", "--print"}, flag: "--model", want: []string{"--verbose", "--print"}},
+		{name: "flag not present", args: []string{"--verbose", "--print"}, flag: "--model", want: []string{"--verbose", "--print"}},
+		{name: "flag at end with value", args: []string{"--verbose", "--model", "opus"}, flag: "--model", want: []string{"--verbose"}},
+		{name: "empty args", args: []string{}, flag: "--model", want: []string{}},
+		{name: "removes equals form", args: []string{"--verbose", "--model=opus", "--print"}, flag: "--model", want: []string{"--verbose", "--print"}},
+		{name: "removes equals form at end", args: []string{"--verbose", "--model=opus"}, flag: "--model", want: []string{"--verbose"}},
+		{name: "removes bare flag at end", args: []string{"--verbose", "--model"}, flag: "--model", want: []string{"--verbose"}},
+		{name: "removes repeated occurrences", args: []string{"--model", "opus", "--verbose", "--model=sonnet"}, flag: "--model", want: []string{"--verbose"}},
+		{name: "does not match prefix-only", args: []string{"--model-foo", "bar", "--print"}, flag: "--model", want: []string{"--model-foo", "bar", "--print"}},
+		{name: "bare flag in middle preserves next flag", args: []string{"--verbose", "--model", "--print"}, flag: "--model", want: []string{"--verbose", "--print"}},
+		{name: "bare flag preserves next flag with dash value", args: []string{"--model", "-x", "--print"}, flag: "--model", want: []string{"-x", "--print"}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := stripFlag(tc.args, tc.flag)
+			assert.Equal(t, tc.want, got)
+		})
+	}
+}
+
 func TestFilterEnv(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -1214,14 +1242,105 @@ func TestClaudeExecutor_Run_ModelFlag(t *testing.T) {
 
 	t.Run("model set injects --model flag", func(t *testing.T) {
 		e := &ClaudeExecutor{Model: "sonnet", cmdRunner: mock}
-		e.Run(context.Background(), "test")
+		result := e.Run(context.Background(), "test")
+		require.NoError(t, result.Error)
 		assert.Contains(t, capturedArgs, "--model")
 		assert.Contains(t, capturedArgs, "sonnet")
 	})
 
 	t.Run("model empty does not inject --model flag", func(t *testing.T) {
 		e := &ClaudeExecutor{cmdRunner: mock}
-		e.Run(context.Background(), "test")
+		result := e.Run(context.Background(), "test")
+		require.NoError(t, result.Error)
 		assert.NotContains(t, capturedArgs, "--model")
+	})
+
+	t.Run("model overrides existing --model in args", func(t *testing.T) {
+		e := &ClaudeExecutor{Args: "--verbose --model opus --output-format json", Model: "sonnet", cmdRunner: mock}
+		result := e.Run(context.Background(), "test")
+		require.NoError(t, result.Error)
+		assert.Contains(t, capturedArgs, "sonnet")
+		assert.NotContains(t, capturedArgs, "opus", "old --model value should be stripped")
+		// count --model occurrences — should be exactly one
+		count := 0
+		for _, a := range capturedArgs {
+			if a == "--model" {
+				count++
+			}
+		}
+		assert.Equal(t, 1, count, "should have exactly one --model flag")
+	})
+}
+
+func TestClaudeExecutor_Run_EffortFlag(t *testing.T) {
+	jsonStream := `{"type":"content_block_delta","delta":{"type":"text_delta","text":"ok"}}`
+
+	// newMock returns a fresh mock whose RunFunc writes captured args into
+	// the provided slot. using a per-subtest slot avoids cross-test leakage.
+	newMock := func(slot *[]string) *mocks.CommandRunnerMock {
+		return &mocks.CommandRunnerMock{
+			RunFunc: func(_ context.Context, _ string, args ...string) (io.Reader, func() error, error) {
+				*slot = args
+				return strings.NewReader(jsonStream), func() error { return nil }, nil
+			},
+		}
+	}
+
+	countFlag := func(args []string, flag string) int {
+		n := 0
+		for _, a := range args {
+			if a == flag {
+				n++
+			}
+		}
+		return n
+	}
+
+	t.Run("effort set injects --effort flag", func(t *testing.T) {
+		var capturedArgs []string
+		e := &ClaudeExecutor{Effort: "high", cmdRunner: newMock(&capturedArgs)}
+		result := e.Run(context.Background(), "test")
+		require.NoError(t, result.Error)
+		assert.Contains(t, capturedArgs, "--effort")
+		assert.Contains(t, capturedArgs, "high")
+	})
+
+	t.Run("effort empty does not inject --effort flag", func(t *testing.T) {
+		var capturedArgs []string
+		e := &ClaudeExecutor{cmdRunner: newMock(&capturedArgs)}
+		result := e.Run(context.Background(), "test")
+		require.NoError(t, result.Error)
+		assert.NotContains(t, capturedArgs, "--effort")
+	})
+
+	t.Run("model and effort together inject both flags", func(t *testing.T) {
+		var capturedArgs []string
+		e := &ClaudeExecutor{Model: "opus", Effort: "medium", cmdRunner: newMock(&capturedArgs)}
+		result := e.Run(context.Background(), "test")
+		require.NoError(t, result.Error)
+		assert.Contains(t, capturedArgs, "--model")
+		assert.Contains(t, capturedArgs, "opus")
+		assert.Contains(t, capturedArgs, "--effort")
+		assert.Contains(t, capturedArgs, "medium")
+	})
+
+	t.Run("effort overrides existing --effort in args", func(t *testing.T) {
+		var capturedArgs []string
+		e := &ClaudeExecutor{Args: "--verbose --effort low --output-format json", Effort: "high", cmdRunner: newMock(&capturedArgs)}
+		result := e.Run(context.Background(), "test")
+		require.NoError(t, result.Error)
+		assert.Contains(t, capturedArgs, "high")
+		assert.NotContains(t, capturedArgs, "low", "old --effort value should be stripped")
+		assert.Equal(t, 1, countFlag(capturedArgs, "--effort"), "should have exactly one --effort flag")
+	})
+
+	t.Run("effort overrides equals form in args", func(t *testing.T) {
+		var capturedArgs []string
+		e := &ClaudeExecutor{Args: "--verbose --effort=low --output-format json", Effort: "high", cmdRunner: newMock(&capturedArgs)}
+		result := e.Run(context.Background(), "test")
+		require.NoError(t, result.Error)
+		assert.Contains(t, capturedArgs, "high")
+		assert.NotContains(t, capturedArgs, "--effort=low", "equals form should be stripped")
+		assert.Equal(t, 1, countFlag(capturedArgs, "--effort"), "should have exactly one --effort flag")
 	})
 }

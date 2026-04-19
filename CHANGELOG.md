@@ -1,5 +1,39 @@
 # Changelog
 
+## v0.27.2 - 2026-04-16
+
+### Improved
+
+- Add optional `--effort` level to `task_model` / `review_model` via `model[:effort]` syntax #285 @umputun
+
+## v0.27.1 - 2026-04-16
+
+### Improved
+
+- Rename `claude_model`/`--claude-model` to `task_model`/`--task-model` for symmetry with `review_model`/`--review-model` #284 @umputun
+- Pass task model to plan mode (was missing in #272)
+- Clarify docs that model flags are passed to custom wrappers (may be ignored or implemented)
+
+### Fixed
+
+- `stripFlag` now handles `--flag=value` and bare `--flag` forms, prevents duplicate `--model` in `claude_args` #284 @umputun
+
+## v0.27.0 - 2026-04-16
+
+### New Features
+
+- Add GitHub Copilot CLI support #275 @AOrlov
+- Add per-phase Claude model configuration #272 @dwilberger
+
+### Improved
+
+- Skip post-codex claude review when no findings #282 @umputun
+- Update all dependencies 2bc0008
+
+### Fixed
+
+- Reduce macOS credential cleanup race and fail fast on missing creds 33390d9
+
 ## v0.26.3 - 2026-04-08
 
 ### Improved

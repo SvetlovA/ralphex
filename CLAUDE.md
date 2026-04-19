@@ -44,6 +44,7 @@ e2e/                # playwright e2e tests for web dashboard
 scripts/            # utility scripts organized by function
 scripts/ralphex-dk/ # Docker wrapper script (Python) with tests
 scripts/codex-as-claude/ # codex wrapper for Claude-compatible output
+scripts/copilot-as-claude/ # GitHub Copilot CLI wrapper for Claude-compatible output
 scripts/gemini-as-claude/ # gemini wrapper for Claude-compatible output
 scripts/hg2git/     # Mercurial-to-git translation script with tests
 scripts/opencode/   # opencode wrapper scripts with tests
@@ -57,6 +58,7 @@ docs/plans/         # plan files location
 - All comments lowercase except godoc
 - Table-driven tests with testify
 - 80%+ test coverage target
+- Documentation: use `--flag=value` form for long CLI flags with values (not `--flag value`)
 
 ## Key Patterns
 
@@ -70,9 +72,10 @@ docs/plans/         # plan files location
 - Multiple execution modes: full, tasks-only, review-only, external-only/codex-only, plan creation
 - `--base-ref` flag overrides default branch for review diffs (branch name or commit hash)
 - `--skip-finalize` flag disables finalize step for a single run
-- `--wait` flag enables rate limit retry with specified duration (e.g., `--wait 1h`)
-- `--session-timeout` flag sets per-session timeout for claude (e.g., `--session-timeout 30m`), kills hanging sessions
-- `--idle-timeout` flag kills claude sessions when no output is received for a specified duration (e.g., `--idle-timeout 5m`), resets on each output line
+- `--task-model` flag sets model for task execution with optional effort via `model[:effort]` syntax (e.g., `--task-model=opus`, `--task-model=opus:high`, `--task-model=:medium` for effort-only). Effort levels: `low`, `medium`, `high`, `xhigh`, `max`. `--review-model` sets model/effort for review phases (falls back to `--task-model`). Injected as `--model <value>` and/or `--effort <value>` into the configured `claude_command`; custom wrappers may ignore (default behavior via `*) shift ;;`) or map them to their own selection
+- `--wait` flag enables rate limit retry with specified duration (e.g., `--wait=1h`)
+- `--session-timeout` flag sets per-session timeout for claude (e.g., `--session-timeout=30m`), kills hanging sessions
+- `--idle-timeout` flag kills claude sessions when no output is received for a specified duration (e.g., `--idle-timeout=5m`), resets on each output line
 - `--review-patience` flag terminates external review after N unchanged rounds (stalemate detection)
 - Manual break via SIGQUIT (Ctrl+\) works in both task and external review loops. In task phase, break pauses execution and prompts "press Enter to continue, Ctrl+C to abort"; on resume the same task re-runs with a fresh session that re-reads the plan file (allowing mid-run plan edits). In external review, break terminates the loop immediately. Not available on Windows
 - Custom external review support via scripts (wraps any AI tool)
@@ -130,11 +133,17 @@ Key files:
 
 ### Alternative Providers for Claude Phases
 
-`claude_command` and `claude_args` config options allow replacing Claude Code with any CLI that produces compatible `stream-json` output. A codex wrapper script is included at `scripts/codex-as-claude/codex-as-claude.sh`.
+`claude_command` and `claude_args` config options allow replacing Claude Code with any CLI that produces compatible `stream-json` output. Included wrappers:
 
-Config: `claude_command = /path/to/codex-as-claude.sh` and optionally `claude_args =` (empty).
+- `scripts/codex-as-claude/codex-as-claude.sh`
+- `scripts/copilot-as-claude/copilot-as-claude.sh`
+
+Config: `claude_command = /path/to/<wrapper>.sh` and optionally `claude_args =` (empty).
 Note: default Claude flags may still be passed due to config fallback; wrappers should ignore unknown flags gracefully (the included script does this via `*) shift ;;`).
-Env vars: `CODEX_MODEL`, `CODEX_SANDBOX`, `CODEX_VERBOSE` (set to 1 for command output).
+Env vars:
+- Codex: `CODEX_MODEL`, `CODEX_SANDBOX`, `CODEX_VERBOSE`
+- Copilot: `COPILOT_MODEL`, `COPILOT_GITHUB_TOKEN`, `GH_TOKEN`, `GITHUB_TOKEN`
+Copilot wrapper behavior: runs `copilot` in native autopilot mode with `--autopilot --no-ask-user --allow-all` for unattended task/review phases; plan runs switch to `--autopilot --allow-all` so `QUESTION` signals can surface clarifications without native question suppression.
 Documentation: `docs/custom-providers.md`
 
 ### AWS Bedrock Provider (Docker Wrapper Only)
@@ -273,6 +282,8 @@ GOOS=windows GOARCH=amd64 go build ./...
 - Precedence: CLI flags > local config > global config > embedded defaults
 - Custom prompts: `~/.config/ralphex/prompts/*.txt` or `.ralphex/prompts/*.txt`
 - Custom agents: `~/.config/ralphex/agents/*.txt` or `.ralphex/agents/*.txt`
+- `task_model` config option: model[:effort] for task execution (e.g., `opus`, `opus:high`, `:medium`). Effort values: `low`, `medium`, `high`, `xhigh`, `max`. CLI flag `--task-model` takes precedence. Parsed in `ParseModelEffort` (pkg/processor/runner.go), split on first colon. Appended to `claude_command` as `--model <m>` and/or `--effort <e>`; custom wrappers may ignore or implement the flags. Disabled by default (empty = Claude CLI defaults)
+- `review_model` config option: model[:effort] for review phases. Falls back to `task_model` if empty. CLI flag `--review-model` takes precedence. Same wrapper behavior and syntax as `task_model`. Disabled by default
 - `default_branch` config option: override auto-detected default branch for review diffs
 - `max_iterations` config option: override CLI default (50) for maximum task iterations per plan (CLI flag `--max-iterations` takes precedence)
 - `vcs_command` config option: override the VCS binary used by the git backend (default: `"git"`). Set to a translation script path (e.g., `scripts/hg2git/hg2git.sh`) to use ralphex with Mercurial repos. See `docs/hg-support.md`
