@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.27.3 - 2026-04-19
+
+### Fixed
+
+- Preserve progress file on failed run (#288) #289 @umputun
+
 ## v0.27.2 - 2026-04-16
 
 ### Improved
