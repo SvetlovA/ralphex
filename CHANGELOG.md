@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.0.0 - 2026-04-21
+
+First stable release. From this point forward, ralphex follows Semantic Versioning with a backward compatibility promise for the public surface (CLI flags, config file format, prompt/agent template variables, and progress file structure).
+
+### Fixed
+
+- Validate plan has task sections before task loop #291 @umputun
+
 ## v0.27.3 - 2026-04-19
 
 ### Fixed
