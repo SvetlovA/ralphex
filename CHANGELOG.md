@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.0.1 - 2026-04-21
+
+### Fixed
+
+- Also pass `TZ` env var in Docker wrapper so Go's `time.Now()` respects the host timezone (previously only `TIME_ZONE` was forwarded, which baseimage consumes but Go ignores) #297 @umputun
+
 ## v1.0.0 - 2026-04-21
 
 First stable release. From this point forward, ralphex follows Semantic Versioning with a backward compatibility promise for the public surface (CLI flags, config file format, prompt/agent template variables, and progress file structure).
