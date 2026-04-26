@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/fatih/color"
 	"golang.org/x/term"
@@ -125,6 +126,7 @@ type Logger struct {
 	startTime time.Time
 	holder    *status.PhaseHolder
 	colors    *Colors
+	runErr    error // set via SetFailed to record non-success outcome for the footer
 }
 
 // Config holds logger configuration.
@@ -137,9 +139,10 @@ type Config struct {
 }
 
 // NewLogger creates a logger writing to both a progress file and stdout.
-// if the progress file already exists with a completion footer, it is truncated
-// and a fresh header is written. if the file exists without a completion footer
-// (interrupted run), existing log is preserved and a restart separator is written.
+// if the progress file already ends with a "Completed:" footer (successful run),
+// it is truncated and a fresh header is written. if the file ended with a "Failed:"
+// footer or has no footer (interrupted/failed run), the existing log is preserved
+// and a restart separator is written so history carries across retries (issue #288).
 // colors must be provided (created via NewColors from config).
 // holder is the shared PhaseHolder for reading the current execution phase.
 func NewLogger(cfg Config, colors *Colors, holder *status.PhaseHolder) (*Logger, error) {
@@ -564,14 +567,30 @@ func (l *Logger) Elapsed() string {
 	return d.Truncate(time.Second).String()
 }
 
+// SetFailed marks the logger as failed with the given reason. On Close, a "Failed:"
+// footer is written instead of "Completed:", so the restart path appends to the file
+// (preserving history) rather than truncating. Safe to call multiple times; the most
+// recent call wins (passing nil clears any previous failure state).
+func (l *Logger) SetFailed(reason error) {
+	l.runErr = reason
+}
+
 // Close writes footer, releases the file lock, and closes the progress file.
+// Writes "Completed:" footer on success, or "Failed: ... - <reason>" if SetFailed
+// was called with a non-nil error.
 func (l *Logger) Close() error {
 	if l.file == nil {
 		return nil
 	}
 
 	l.writeFile("\n%s\n", separatorLine)
-	l.writeFile("Completed: %s (%s)\n", time.Now().Format("2006-01-02 15:04:05"), l.Elapsed())
+	ts := time.Now().Format("2006-01-02 15:04:05")
+	if l.runErr == nil {
+		l.writeFile("Completed: %s (%s)\n", ts, l.Elapsed())
+	} else {
+		reason := sanitizeFailureReason(l.runErr.Error())
+		l.writeFile("Failed: %s (%s) - %s\n", ts, l.Elapsed(), reason)
+	}
 
 	// release file lock before closing
 	_ = unlockFile(l.file)
@@ -581,6 +600,34 @@ func (l *Logger) Close() error {
 		return fmt.Errorf("close progress file: %w", err)
 	}
 	return nil
+}
+
+// maxFailureReasonRunes caps the failure reason written into the footer.
+// Rune-based cap avoids splitting multibyte sequences at the boundary.
+const maxFailureReasonRunes = 200
+
+// sanitizeFailureReason prepares an error string for single-line footer output.
+// Replaces Unicode control chars (unicode.IsControl, covers ASCII C0 + C1 ranges)
+// and line/paragraph separators (U+2028, U+2029) with a single space, collapses
+// consecutive whitespace via strings.Fields, and rune-aware truncates to
+// maxFailureReasonRunes. Critical for isProgressCompleted integrity: the reason
+// must not contain "\n<separatorLine>\nCompleted:" which would false-positive
+// the tail scan.
+func sanitizeFailureReason(s string) string {
+	mapped := strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) || r == '\u2028' || r == '\u2029' {
+			return ' '
+		}
+		return r
+	}, s)
+	out := strings.Join(strings.Fields(mapped), " ")
+	if runes := []rune(out); len(runes) > maxFailureReasonRunes {
+		out = string(runes[:maxFailureReasonRunes]) + "..."
+	}
+	if out == "" {
+		return "unknown error"
+	}
+	return out
 }
 
 func (l *Logger) writeFile(format string, args ...any) {
@@ -593,9 +640,11 @@ func (l *Logger) writeStdout(format string, args ...any) {
 	fmt.Fprintf(l.stdout, format, args...)
 }
 
-// isProgressCompleted checks if a progress file has a completion footer written by Close().
+// isProgressCompleted reports whether the progress file ends with a successful "Completed:"
+// footer written by Close(). "Failed:" footers are intentionally excluded so failed/aborted
+// runs preserve history on restart (issue #288).
 // reads the last ~256 bytes from the provided file descriptor and checks for the dash separator
-// followed by "Completed:" — the exact pattern Close() writes.
+// followed by "Completed:" — the exact pattern Close() writes on success.
 // uses the already-locked fd to avoid TOCTOU path-vs-inode mismatch.
 // returns false for zero-size files or read errors.
 func isProgressCompleted(f *os.File, size int64) bool {

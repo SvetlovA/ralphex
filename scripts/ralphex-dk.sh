@@ -7,7 +7,10 @@ Usage: ralphex-dk.sh [wrapper-flags] [ralphex-args]
 Wrapper-specific flags (parsed by this script):
   -E, --env VAR[=val]        extra env var to pass to container (repeatable)
   -v, --volume src:dst[:opts] extra volume mount (repeatable)
+  --image IMAGE              Docker image (env: RALPHEX_IMAGE)
+  --port PORT                web dashboard port with --serve (env: RALPHEX_PORT)
   --docker                   mount host Docker socket into container
+  --network MODE             Docker network mode, e.g. 'host'
   --dry-run                  print docker command without executing
   --update                   pull latest Docker image and exit
   --update-script            update this wrapper script and exit
@@ -137,6 +140,10 @@ def build_parser() -> argparse.ArgumentParser:
                         help="mount host Docker socket into container (env: RALPHEX_DOCKER_SOCKET)")
     parser.add_argument("--network", dest="network", metavar="MODE",
                         help="Docker network mode, e.g. 'host' (env: RALPHEX_DOCKER_NETWORK)")
+    parser.add_argument("--image", dest="image", metavar="IMAGE",
+                        help=f"Docker image (default: {DEFAULT_IMAGE}) (env: RALPHEX_IMAGE)")
+    parser.add_argument("--port", dest="port", metavar="PORT",
+                        help=f"web dashboard port with --serve (default: {DEFAULT_PORT}) (env: RALPHEX_PORT)")
     parser.add_argument("--dry-run", action="store_true", dest="dry_run",
                         help="print docker command that would be run, without executing")
     return parser
@@ -878,9 +885,13 @@ def schedule_cleanup(creds_temp: Optional[Path]) -> None:
 
 def build_base_env_vars() -> list[str]:
     """build base docker environment variable flags shared by all docker commands."""
+    tz = detect_timezone()
+    # TIME_ZONE configures baseimage's /etc/localtime; TZ is what Go's time
+    # package reads for time.Local, so both must be set for consistent timestamps.
     return [
         "-e", f"APP_UID={os.getuid()}",
-        "-e", f"TIME_ZONE={detect_timezone()}",
+        "-e", f"TIME_ZONE={tz}",
+        "-e", f"TZ={tz}",
         "-e", "SKIP_HOME_CHOWN=1",
         "-e", "INIT_QUIET=1",
         "-e", "CLAUDE_CONFIG_DIR=/home/app/.claude",
@@ -997,8 +1008,8 @@ def main() -> int:
         run_tests()
         return 0
 
-    image = os.environ.get("RALPHEX_IMAGE", DEFAULT_IMAGE)
-    port = os.environ.get("RALPHEX_PORT", DEFAULT_PORT)
+    image = parsed.image or os.environ.get("RALPHEX_IMAGE", DEFAULT_IMAGE)
+    port = parsed.port or os.environ.get("RALPHEX_PORT", DEFAULT_PORT)
     network = parsed.network or os.environ.get("RALPHEX_DOCKER_NETWORK", "")
 
     # handle --update
