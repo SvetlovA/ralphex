@@ -13,8 +13,8 @@ import (
 // holdFileLockForTest opens path and acquires a blocking exclusive flock,
 // returning a release function that unlocks and closes the file. used by
 // watcher tests that need IsActive(path) to report true (cross-process
-// flock detection). on Windows there is no flock, so the helper is unix-only;
-// callers must skip via runtime.GOOS == "windows".
+// flock detection). a Windows counterpart in flock_helper_windows_test.go
+// uses LockFileEx on the sentinel byte range used by pkg/progress.
 func holdFileLockForTest(t *testing.T, path string) func() {
 	t.Helper()
 	f, err := os.OpenFile(path, os.O_RDWR, 0o600) //nolint:gosec // test-controlled path from t.TempDir

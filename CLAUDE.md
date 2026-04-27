@@ -252,7 +252,7 @@ Key files:
 - **Linux/macOS:** fully supported
 - **Windows:** builds and runs, but with limitations:
   - Process group signals not available (graceful shutdown kills direct process only, not child processes)
-  - File locking not available (active session detection disabled)
+  - File locking implemented via `LockFileEx` on a sentinel byte at offset 2^63-1 (full-range locks would block the Tailer, since Windows file locks are mandatory)
   - Prompts are passed to the claude CLI via stdin (not `-p` flag) to avoid the cmd.exe 8191-character command-line limit
   - `.cmd`/`.bat` wrapper: npm-installed CLIs (e.g., `claude.cmd`, `codex.cmd`) are automatically wrapped with `cmd /C` via `command.Factory` — no manual configuration needed
 

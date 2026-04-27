@@ -93,7 +93,7 @@ RALPHEX_CLAUDE_PROVIDER=bedrock ralphex docs/plans/feature.md
 - `codex` - for external review (optional)
 - `gemini` - alternative provider for Claude phases (optional, via `scripts/gemini-as-claude/`)
 
-**Windows:** ralphex runs on Windows. npm-installed CLIs (`claude.cmd`, `codex.cmd`) are automatically wrapped with `cmd /C` via `command.Factory` — no manual configuration needed. Limitations: graceful shutdown kills direct process only (not child processes), and active session detection via file locking is unavailable.
+**Windows:** ralphex runs on Windows. npm-installed CLIs (`claude.cmd`, `codex.cmd`) are automatically wrapped with `cmd /C` via `command.Factory` — no manual configuration needed. Limitation: graceful shutdown kills direct process only (not child processes). Active session detection via file locking works on Windows via `LockFileEx`.
 
 ## Customization
 
