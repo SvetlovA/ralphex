@@ -27,6 +27,49 @@ import (
 	"github.com/umputun/ralphex/pkg/status"
 )
 
+// captureStdout runs fn while redirecting os.Stdout (and the fatih/color Output
+// target, which many progress prints use) to a pipe and returns the captured output.
+// uses defer to restore global state even if fn panics or calls t.FailNow, preventing
+// leaked redirections from breaking later tests.
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+	origStdout := os.Stdout
+	origColorOutput := color.Output
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	os.Stdout = w
+	color.Output = w
+
+	done := make(chan string, 1)
+	go func() {
+		var buf bytes.Buffer
+		_, _ = buf.ReadFrom(r)
+		done <- buf.String()
+	}()
+
+	// ensure pipe is closed and globals are restored even if fn panics or t.FailNow is called;
+	// closing w unblocks the reader goroutine so the pipe FDs are released, and closing r
+	// releases the read-end FD rather than waiting for GC finalization.
+	var closed bool
+	closePipe := func() {
+		if !closed {
+			_ = w.Close()
+			closed = true
+		}
+	}
+	defer func() {
+		closePipe()
+		_ = r.Close()
+		os.Stdout = origStdout
+		color.Output = origColorOutput
+	}()
+
+	fn()
+
+	closePipe()
+	return <-done
+}
+
 // testColors returns a Colors instance for testing.
 func testColors() *progress.Colors {
 	return progress.NewColors(config.ColorConfig{
@@ -1075,6 +1118,69 @@ func TestModeRequiresBranch(t *testing.T) {
 	}
 }
 
+func TestShouldMovePlan(t *testing.T) {
+	// tests the shouldMovePlan predicate used to guard the plan move call.
+	// all three conditions must be true: non-empty plan file, mode requires branch, and config opts in.
+	tests := []struct {
+		name     string
+		req      executePlanRequest
+		expected bool
+	}{
+		{
+			name: "empty_plan_file",
+			req: executePlanRequest{
+				PlanFile: "",
+				Mode:     processor.ModeFull,
+				Config:   &config.Config{MovePlanOnCompletion: true},
+			},
+			expected: false,
+		},
+		{
+			name: "mode_does_not_require_branch",
+			req: executePlanRequest{
+				PlanFile: "docs/plans/x.md",
+				Mode:     processor.ModeReview,
+				Config:   &config.Config{MovePlanOnCompletion: true},
+			},
+			expected: false,
+		},
+		{
+			name: "move_plan_on_completion_false",
+			req: executePlanRequest{
+				PlanFile: "docs/plans/x.md",
+				Mode:     processor.ModeFull,
+				Config:   &config.Config{MovePlanOnCompletion: false},
+			},
+			expected: false,
+		},
+		{
+			name: "all_conditions_true_full_mode",
+			req: executePlanRequest{
+				PlanFile: "docs/plans/x.md",
+				Mode:     processor.ModeFull,
+				Config:   &config.Config{MovePlanOnCompletion: true},
+			},
+			expected: true,
+		},
+		{
+			name: "all_conditions_true_tasks_only",
+			req: executePlanRequest{
+				PlanFile: "docs/plans/x.md",
+				Mode:     processor.ModeTasksOnly,
+				Config:   &config.Config{MovePlanOnCompletion: true},
+			},
+			expected: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := shouldMovePlan(tc.req)
+			assert.Equal(t, tc.expected, result)
+		})
+	}
+}
+
 func TestStderrLog(t *testing.T) {
 	// verify stderrLog has Print method with correct signature
 	var log stderrLog
@@ -1881,7 +1987,7 @@ func TestDisplayStats(t *testing.T) {
 
 		req := executePlanRequest{PlanFile: "docs/plans/feature.md", Colors: colors}
 		stats := git.DiffStats{Files: 5, Additions: 200, Deletions: 50}
-		displayStats(req, baseLog, stats, "2m15s", "feature-branch")
+		displayStats(req, baseLog, stats, "2m15s", "feature-branch", false)
 	})
 
 	t.Run("without_diff_stats", func(t *testing.T) {
@@ -1896,7 +2002,7 @@ func TestDisplayStats(t *testing.T) {
 		defer func() { _ = baseLog.Close() }()
 
 		req := executePlanRequest{Colors: colors}
-		displayStats(req, baseLog, git.DiffStats{}, "30s", "main")
+		displayStats(req, baseLog, git.DiffStats{}, "30s", "main", false)
 	})
 
 	t.Run("with_main_plan_file", func(t *testing.T) {
@@ -1915,7 +2021,82 @@ func TestDisplayStats(t *testing.T) {
 			MainPlanFile: "docs/plans/feature.md",
 			Colors:       colors,
 		}
-		displayStats(req, baseLog, git.DiffStats{Files: 1, Additions: 10, Deletions: 5}, "10s", "feature-wt")
+		displayStats(req, baseLog, git.DiffStats{Files: 1, Additions: 10, Deletions: 5}, "10s", "feature-wt", false)
+	})
+
+	// plan-path display must reflect the actual location of the plan file:
+	// completed/ path only when the move succeeded, original path when the move was
+	// skipped or failed. The caller (executePlan) passes planMoved=true only after
+	// a successful MovePlanToCompleted call, so this test drives the flag directly.
+	t.Run("plan_path_reflects_plan_moved_flag", func(t *testing.T) {
+		tests := []struct {
+			name      string
+			req       executePlanRequest
+			planMoved bool
+			wantPath  string
+		}{
+			{
+				name: "moved_shows_completed_path",
+				req: executePlanRequest{
+					PlanFile: "docs/plans/feature.md",
+					Mode:     processor.ModeFull,
+					Config:   &config.Config{MovePlanOnCompletion: true},
+				},
+				planMoved: true,
+				wantPath:  filepath.Join("docs", "plans", "completed", "feature.md"),
+			},
+			{
+				name: "not_moved_shows_original_path",
+				req: executePlanRequest{
+					PlanFile: "docs/plans/feature.md",
+					Mode:     processor.ModeFull,
+					Config:   &config.Config{MovePlanOnCompletion: false},
+				},
+				planMoved: false,
+				wantPath:  "docs/plans/feature.md",
+			},
+			{
+				name: "move_failed_shows_original_path",
+				req: executePlanRequest{
+					PlanFile: "docs/plans/feature.md",
+					Mode:     processor.ModeFull,
+					Config:   &config.Config{MovePlanOnCompletion: true},
+				},
+				planMoved: false,
+				wantPath:  "docs/plans/feature.md",
+			},
+			{
+				name: "review_mode_not_moved_shows_original_path",
+				req: executePlanRequest{
+					PlanFile: "docs/plans/feature.md",
+					Mode:     processor.ModeReview,
+					Config:   &config.Config{MovePlanOnCompletion: true},
+				},
+				planMoved: false,
+				wantPath:  "docs/plans/feature.md",
+			},
+		}
+
+		for _, tc := range tests {
+			t.Run(tc.name, func(t *testing.T) {
+				chdirTemp(t)
+				colors := testColors()
+				holder := &status.PhaseHolder{}
+				baseLog, err := progress.NewLogger(progress.Config{
+					PlanFile: "x.md", Mode: "full", Branch: "main", NoColor: true,
+				}, colors, holder)
+				require.NoError(t, err)
+				defer func() { _ = baseLog.Close() }()
+
+				req := tc.req
+				req.Colors = colors
+
+				output := captureStdout(t, func() {
+					displayStats(req, baseLog, git.DiffStats{}, "1s", "main", tc.planMoved)
+				})
+				assert.Contains(t, output, "  plan: "+tc.wantPath+"\n")
+			})
+		}
 	})
 }
 
