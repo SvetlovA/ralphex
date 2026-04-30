@@ -36,6 +36,10 @@ type opts struct {
 	ReviewPatience        int           `long:"review-patience" default:"0" description:"terminate external review after N unchanged rounds (0 = disabled)"`
 	TaskModel             string        `long:"task-model" description:"model for task execution as model[:effort] (e.g., opus, opus:high, :medium)"`
 	ReviewModel           string        `long:"review-model" description:"model for review phases as model[:effort] (falls back to --task-model)"`
+	ClaudeCommand         string        `long:"claude-command" description:"override claude-compatible command for this run"`
+	ClaudeArgs            string        `long:"claude-args" description:"override claude-compatible command args for this run"`
+	ExternalReviewTool    string        `long:"external-review-tool" choice:"codex" choice:"custom" choice:"none" description:"override external review tool for this run"`
+	CustomReviewScript    string        `long:"custom-review-script" description:"override custom external review script for this run"`
 	Review                bool          `short:"r" long:"review" description:"skip task execution, run full review pipeline"`
 	ExternalOnly          bool          `short:"e" long:"external-only" description:"skip tasks and first review, run only external review loop"`
 	CodexOnly             bool          `short:"c" long:"codex-only" description:"alias for --external-only (deprecated)"`
@@ -65,6 +69,11 @@ type opts struct {
 	waitSet           bool
 	sessionTimeoutSet bool
 	idleTimeoutSet    bool
+
+	claudeCommandSet      bool
+	claudeArgsSet         bool
+	externalReviewToolSet bool
+	customReviewScriptSet bool
 }
 
 // markFlagsSet detects which duration flags were explicitly provided on the CLI
@@ -76,6 +85,10 @@ func (o *opts) markFlagsSet(parser *flags.Parser) {
 	o.waitSet = isFlagSet(parser, "wait")
 	o.sessionTimeoutSet = isFlagSet(parser, "session-timeout")
 	o.idleTimeoutSet = isFlagSet(parser, "idle-timeout")
+	o.claudeCommandSet = isFlagSet(parser, "claude-command")
+	o.claudeArgsSet = isFlagSet(parser, "claude-args")
+	o.externalReviewToolSet = isFlagSet(parser, "external-review-tool")
+	o.customReviewScriptSet = isFlagSet(parser, "custom-review-script")
 }
 
 var revision = "unknown"
@@ -232,6 +245,7 @@ func run(ctx context.Context, o opts) error {
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}
+	applyCLIOverrides(o, cfg)
 
 	// create colors from config (all colors guaranteed populated via fallback)
 	colors := progress.NewColors(cfg.Colors)
@@ -279,7 +293,6 @@ func run(ctx context.Context, o opts) error {
 	defaultBranch := resolveDefaultBranch("", cfg.DefaultBranch, autoDetected)
 	// baseRef is for review diffs and {{DEFAULT_BRANCH}} template variable (--base-ref override)
 	baseRef := resolveDefaultBranch(o.BaseRef, cfg.DefaultBranch, autoDetected)
-	applyCLIOverrides(o, cfg)
 
 	mode := determineMode(o)
 
@@ -889,6 +902,7 @@ func createRunner(req executePlanRequest, o opts, log processor.Logger, holder *
 		IterationDelayMs:      req.Config.IterationDelayMs,
 		TaskRetryCount:        req.Config.TaskRetryCount,
 		CodexEnabled:          codexEnabled,
+		ExternalReviewToolSet: o.externalReviewToolSet,
 		FinalizeEnabled:       req.Config.FinalizeEnabled,
 		DefaultBranch:         req.BaseRef,
 		TaskModel:             taskModel,
@@ -1252,6 +1266,19 @@ func applyCLIOverrides(o opts, cfg *config.Config) {
 	if o.IdleTimeout > 0 || (o.IdleTimeout == 0 && o.idleTimeoutSet) {
 		cfg.IdleTimeout = o.IdleTimeout
 		cfg.IdleTimeoutSet = true
+	}
+	if o.claudeCommandSet {
+		cfg.ClaudeCommand = o.ClaudeCommand
+	}
+	if o.claudeArgsSet {
+		cfg.ClaudeArgs = o.ClaudeArgs
+		cfg.ClaudeArgsSet = true
+	}
+	if o.externalReviewToolSet {
+		cfg.ExternalReviewTool = o.ExternalReviewTool
+	}
+	if o.customReviewScriptSet {
+		cfg.CustomReviewScript = o.CustomReviewScript
 	}
 }
 
