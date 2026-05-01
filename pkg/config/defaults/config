@@ -224,8 +224,8 @@ codex_error_patterns = Rate limit,quota exceeded,You've hit your usage limit
 # comma-separated list of substrings (case-insensitive matching)
 # when detected AND wait_on_limit is set, ralphex waits and retries
 # when detected WITHOUT wait_on_limit, falls through to error pattern behavior
-# default: You've hit your limit
-claude_limit_patterns = You've hit your limit
+# default: You've hit your limit,Your usage allocation has been disabled by your admin
+claude_limit_patterns = You've hit your limit,Your usage allocation has been disabled by your admin
 
 # codex_limit_patterns: patterns to detect rate limits in codex/external output
 # comma-separated list of substrings (case-insensitive matching)
