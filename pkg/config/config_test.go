@@ -343,6 +343,47 @@ func TestLoad_FinalizeEnabledDefaultFalse(t *testing.T) {
 	assert.False(t, cfg.FinalizeEnabledSet)
 }
 
+func TestLoad_MovePlanOnCompletion(t *testing.T) {
+	testCases := []struct {
+		name       string
+		configBody string
+		wantVal    bool
+	}{
+		{
+			name:       "default not set yields true",
+			configBody: "",
+			wantVal:    true,
+		},
+		{
+			name:       "explicit true yields true",
+			configBody: "move_plan_on_completion = true",
+			wantVal:    true,
+		},
+		{
+			name:       "explicit false yields false",
+			configBody: "move_plan_on_completion = false",
+			wantVal:    false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			configDir := filepath.Join(tmpDir, "ralphex")
+			require.NoError(t, os.MkdirAll(configDir, 0o700))
+			require.NoError(t, os.MkdirAll(filepath.Join(configDir, "prompts"), 0o700))
+			require.NoError(t, os.MkdirAll(filepath.Join(configDir, "agents"), 0o700))
+
+			require.NoError(t, os.WriteFile(filepath.Join(configDir, "config"), []byte(tc.configBody), 0o600))
+
+			cfg, err := Load(configDir)
+			require.NoError(t, err)
+
+			assert.Equal(t, tc.wantVal, cfg.MovePlanOnCompletion)
+		})
+	}
+}
+
 func TestLoad_AllUserValues(t *testing.T) {
 	tmpDir := t.TempDir()
 	configDir := filepath.Join(tmpDir, "ralphex")

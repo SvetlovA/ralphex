@@ -73,7 +73,7 @@ e2e-codex: build
 	@echo "Monitor: tail -f /tmp/ralphex-review-test/progress-codex.txt"
 
 prep_site:
-	# prepare docs source directory for mkdocs
+	# prepare docs source directory for zensical
 	rm -rf site/docs-src && mkdir -p site/docs-src
 	cp -fv README.md site/docs-src/index.md
 	cp -rv assets site/docs-src/
@@ -88,9 +88,9 @@ prep_site:
 	cp -fv site/docs/sitemap.xml site/site/
 	cp -rv assets site/site/
 	cp -fv llms.txt site/site/
-	# build mkdocs into site/site/docs/
-	cd site && pip install -r requirements.txt && mkdocs build
-	# copy raw claude assets (not rendered by mkdocs)
+	# build site into site/site/docs/ (use venv for PEP 668 compliance)
+	cd site && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt && .venv/bin/zensical build
+	# copy raw claude assets (not rendered by build)
 	rm -rf site/site/docs/assets/claude && cp -rv assets/claude site/site/docs/assets/
 
 docker-build:

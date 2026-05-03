@@ -204,7 +204,7 @@ Key files:
 
 ### Worktree Isolation Mode
 
-`--worktree` flag or `use_worktree = true` config option runs each plan in an isolated git worktree, enabling parallel execution of multiple plans on the same repo.
+`--worktree` flag or `use_worktree = true` config option runs each plan in an isolated git worktree, enabling parallel execution of multiple plans on the same repo. `--branch` flag overrides the branch name derived from the plan filename (useful when auto-detection is fragile, e.g. generic filenames or spec-driven layouts).
 
 - Worktrees created at `.ralphex/worktrees/<branch-name>` inside main repo
 - Progress logger created before chdir so files land in main repo's `.ralphex/progress/`
@@ -294,6 +294,7 @@ GOOS=windows GOARCH=amd64 go build ./...
 - `wait_on_limit` config option: duration to wait before retrying on rate limit (e.g., "1h", "30m"). CLI flag `--wait` takes precedence. Disabled by default
 - `session_timeout` config option: per-session timeout for claude (e.g., "30m", "1h"). Kills hanging sessions and continues to next iteration. CLI flag `--session-timeout` takes precedence. Disabled by default
 - `idle_timeout` config option: kills claude sessions when no output for specified duration (e.g., "5m"). Resets on each output line, only fires when session goes silent. CLI flag `--idle-timeout` takes precedence. Disabled by default
+- `move_plan_on_completion` config option: controls whether completed plans move to `docs/plans/completed/` on success. Default `true`. Disable for workflows that manage plan lifecycle externally (spec-driven tooling with separate archive steps)
 
 ### Local Project Config (.ralphex/)
 
@@ -327,17 +328,18 @@ project/
 ### Error Pattern Detection
 
 Configurable patterns detect rate limit and quota errors in claude/codex output:
-- `claude_error_patterns`: comma-separated patterns for claude (default: "You've hit your limit,API Error:,cannot be launched inside another Claude Code session,Not logged in")
-- `codex_error_patterns`: comma-separated patterns for codex (default: "Rate limit,quota exceeded")
+- `claude_error_patterns`: comma-separated patterns for claude (default: "You've hit your limit,API Error:,cannot be launched inside another Claude Code session,Not logged in,Your usage allocation has been disabled by your admin")
+- `codex_error_patterns`: comma-separated patterns for codex (default: "Rate limit,quota exceeded,You've hit your usage limit")
 - Matching is case-insensitive substring search
 - Whitespace is trimmed from each pattern
 - For claude: patterns checked against the last 10 text blocks (not full output) to avoid false positives when analysis text mentions rate limit phrases. Context cancellation paths bypass pattern checks
-- For codex and custom executors: patterns checked only when process exits with non-zero status and context is not canceled (avoids false positives from review findings and cancellation masking)
+- For codex: patterns checked against stdout AND a live per-line scan of stderr. Stderr scanning runs inside `processStderr` on each incoming line BEFORE the 5-line / 256-rune tail truncation used for human-readable error context, so detection is eviction- and truncation-resistant. The scan is gated by `isCodexErrorLine` (matches `error:`/`fatal:`/`panic:` prefix, case-insensitive) so progress chatter — header banners, bold summaries, model thinking that may legitimately mention "rate limit" while reviewing code — cannot trigger false positives. The first matching limit/error pattern per category is recorded on `stderrResult.{limitMatch,errorMatch}` and consumed by `CodexExecutor.checkPatterns`. Priority is limit-class first across both sources, so a real prefix-gated stderr quota diagnostic cannot be downgraded to a non-retryable `PatternMatchError` by a coincidental stdout error match: `stdout limit → stderr limit → stdout error → stderr error`. Within a class, stdout wins over stderr. Patterns are evaluated only when process exits non-zero and context is not canceled. Stderr is scanned because OpenAI/ChatGPT plan-quota errors (e.g., "ERROR: You've hit your usage limit") are emitted on stderr while stdout is empty on failure
+- For custom executors: stderr is merged into stdout by the executor itself (`cmd.Stderr = cmd.Stdout`), so the same pattern check covers both streams. Patterns checked only when process exits non-zero and context is not canceled
 - On match, ralphex exits gracefully with pattern info and help command suggestion
 
 Limit patterns for wait+retry behavior:
-- `claude_limit_patterns`: comma-separated (default: "You've hit your limit")
-- `codex_limit_patterns`: comma-separated (default: "Rate limit,quota exceeded")
+- `claude_limit_patterns`: comma-separated (default: "You've hit your limit,Your usage allocation has been disabled by your admin")
+- `codex_limit_patterns`: comma-separated (default: "Rate limit,quota exceeded,You've hit your usage limit")
 - `wait_on_limit`: duration string (e.g., "1h", "30m"), disabled by default
 - `--wait` CLI flag overrides `wait_on_limit` config
 - Priority: limit patterns checked first; if match AND wait > 0, wait and retry; if match AND wait == 0, fall through to error pattern behavior
@@ -386,6 +388,7 @@ Variables are also expanded inside agent content, so custom agents can use `{{DE
 - Run `ralphex --reset` to interactively restore defaults, or delete ALL `.txt` files manually
 - Run `ralphex --dump-defaults <dir>` to extract raw embedded defaults for comparison or merging
 - Use `/ralphex-update` skill for smart merging of updated defaults into customized configs
+- Use `/ralphex-adopt` skill to convert plans from other formats (OpenSpec, spec-kit, GitHub/GitLab issues, task-lists, free-form markdown) into ralphex format
 - Alternatively, reference agents installed in your Claude Code directly in prompt files (like `qa-expert`, `go-smells-expert`)
 
 ## Testing
@@ -517,13 +520,15 @@ If you're an AI agent preparing a contribution, complete this checklist:
 - [ ] Checked for security issues (injection, secrets exposure, etc.)
 - [ ] Commit messages describe "why", not just "what"
 
-## MkDocs Site
+## Documentation Site (Zensical)
 
-- Site source: `site/` directory with `mkdocs.yml`
-- **Landing page**: `site/docs/index.html` is a manually crafted HTML page, not generated by MkDocs. Edit it directly to update the landing page.
+- Site source: `site/` directory with `mkdocs.yml` (read natively by Zensical)
+- Builder: `zensical` (replaced mkdocs-material; `requirements.txt` lists only `zensical`)
+- **Landing page**: `site/docs/index.html` is a manually crafted HTML page, not generated by the SSG. Edit it directly to update the landing page.
 - Template overrides: `site/overrides/` with `custom_dir: overrides` in mkdocs.yml
-- **CI constraint**: Cloudflare Pages uses mkdocs-material 9.2.x, must use `materialx.emoji` syntax (not `material.extensions.emoji` which requires 9.4+)
-- **Raw .md files**: MkDocs renders ALL `.md` files in `docs_dir` as HTML pages. To serve raw markdown (e.g., `assets/claude/*.md` for Claude Code skills), copy them AFTER `mkdocs build` - see `prep_site` target in Makefile
+- **Python version**: Zensical requires Python ≥ 3.10. Local builds use a venv at `site/.venv/` (auto-created by `make prep_site`); Cloudflare Pages requires `PYTHON_VERSION` env var ≥ 3.10
+- **Brand color**: dark-mode palette uses Material's `teal` keyword, then `site/docs/stylesheets/extra.css` overrides `--md-primary-fg-color` / `--md-accent-fg-color` to `#2dd4bf` (Tailwind teal-400) so the docs match the landing page brand color
+- **Raw .md files**: SSG renders ALL `.md` files in `docs_dir` as HTML pages. To serve raw markdown (e.g., `assets/claude/*.md` for Claude Code skills), copy them AFTER `zensical build` - see `prep_site` target in Makefile
 
 ## Testing Safety Rules
 

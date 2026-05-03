@@ -19,7 +19,8 @@ theme:
   palette:
     - scheme: slate
       media: "(prefers-color-scheme: dark)"
-      primary: indigo
+      primary: teal
+      accent: teal
   features:
     - navigation.instant
     - toc.follow

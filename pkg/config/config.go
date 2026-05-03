@@ -33,6 +33,7 @@ const (
 // merge behavior where local config can override global config with zero values.
 //
 // *Set fields:
+//   - ClaudeArgsSet: tracks if claude_args was explicitly overridden at runtime
 //   - CodexEnabledSet: tracks if codex_enabled was explicitly set
 //   - CodexTimeoutMsSet: tracks if codex_timeout_ms was explicitly set
 //   - IterationDelayMsSet: tracks if iteration_delay_ms was explicitly set
@@ -41,9 +42,11 @@ const (
 //   - WorktreeEnabledSet: tracks if use_worktree was explicitly set
 //   - MaxIterationsSet: tracks if max_iterations was explicitly set
 //   - WaitOnLimitSet: tracks if wait_on_limit was explicitly set
+//   - SessionTimeoutSet: tracks if session_timeout was explicitly set
 type Config struct {
 	ClaudeCommand string `json:"claude_command"`
 	ClaudeArgs    string `json:"claude_args"`
+	ClaudeArgsSet bool   `json:"-"`            // tracks runtime overrides, including an explicit empty --claude-args=
 	TaskModel     string `json:"task_model"`   // model[:effort] spec for task execution (e.g., "opus", "opus:high", ":medium")
 	ReviewModel   string `json:"review_model"` // model[:effort] spec for review phases (falls back to TaskModel)
 
@@ -70,6 +73,8 @@ type Config struct {
 
 	FinalizeEnabled    bool `json:"finalize_enabled"`
 	FinalizeEnabledSet bool `json:"-"` // tracks if finalize_enabled was explicitly set in config
+
+	MovePlanOnCompletion bool `json:"move_plan_on_completion"`
 
 	WorktreeEnabled    bool `json:"worktree_enabled"`
 	WorktreeEnabledSet bool `json:"-"` // tracks if use_worktree was explicitly set in config
@@ -299,6 +304,7 @@ func loadConfigFromDirs(globalDir, localDir string) (*Config, error) {
 		ReviewPatience:        values.ReviewPatience,
 		FinalizeEnabled:       values.FinalizeEnabled,
 		FinalizeEnabledSet:    values.FinalizeEnabledSet,
+		MovePlanOnCompletion:  values.MovePlanOnCompletion,
 		WorktreeEnabled:       values.WorktreeEnabled,
 		WorktreeEnabledSet:    values.WorktreeEnabledSet,
 		PlansDir:              values.PlansDir,

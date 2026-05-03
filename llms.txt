@@ -45,6 +45,9 @@ ralphex --wait=1h docs/plans/feature.md
 # use different models for tasks vs reviews (e.g., opus for tasks, sonnet for reviews)
 ralphex --task-model=opus --review-model=sonnet docs/plans/feature.md
 
+# override Claude-compatible provider and external review tool for one run
+ralphex --claude-command=/path/to/codex-as-claude.sh --claude-args= --external-review-tool=custom --custom-review-script=/path/to/review.sh docs/plans/feature.md
+
 # set per-session timeout to kill hanging claude sessions
 ralphex --session-timeout=30m docs/plans/feature.md
 
@@ -59,6 +62,10 @@ ralphex --tasks-only docs/plans/feature.md
 
 # run in isolated git worktree (full and tasks-only modes only; ignored for --review/--external-only)
 ralphex --worktree docs/plans/feature.md
+
+# override branch name when auto-detection is fragile (generic filenames, spec-driven layouts)
+ralphex --worktree --branch=my-feature docs/plans/tasks.md
+ralphex --branch=my-feature docs/plans/tasks.md
 
 # override default branch for review diffs (useful for comparing against specific ref)
 ralphex --review --base-ref develop
@@ -126,9 +133,9 @@ review_model = sonnet:medium
 
 **Manual break (Ctrl+\):** Press Ctrl+\ (SIGQUIT) to intervene during execution. In the task phase, it pauses execution and prompts "press Enter to continue, Ctrl+C to abort" — on Enter the same task re-runs with a fresh session that re-reads the plan file, so you can edit the plan mid-run. In the external review phase, it terminates the loop immediately. Not available on Windows.
 
-**Custom external review:** Set `external_review_tool = custom` and `custom_review_script = /path/to/script.sh` to use your own AI tool instead of codex. Script receives prompt file path as single argument, outputs findings to stdout. ralphex passes the output to Claude for evaluation and fixing.
+**Custom external review:** Set `external_review_tool = custom` and `custom_review_script = /path/to/script.sh` to use your own AI tool instead of codex. Script receives prompt file path as single argument, outputs findings to stdout. ralphex passes the output to Claude for evaluation and fixing. For a one-off run, use `--external-review-tool=custom --custom-review-script=/path/to/script.sh`.
 
-**Alternative providers for Claude phases:** `claude_command` and `claude_args` config options allow replacing Claude Code with any CLI that produces compatible stream-json output. A codex wrapper is included at `scripts/codex-as-claude/codex-as-claude.sh`. Set `claude_command = /path/to/wrapper` in config. Wrappers should ignore unknown flags gracefully. See `docs/custom-providers.md` for details on writing wrappers for other tools (Gemini CLI, local LLMs, etc.).
+**Alternative providers for Claude phases:** `claude_command` and `claude_args` config options allow replacing Claude Code with any CLI that produces compatible stream-json output. A codex wrapper is included at `scripts/codex-as-claude/codex-as-claude.sh`. Set `claude_command = /path/to/wrapper` in config, or use `--claude-command=/path/to/wrapper --claude-args=` for one run. The empty CLI value intentionally clears configured/default args for that invocation. Wrappers should ignore unknown flags gracefully. See `docs/custom-providers.md` for details on writing wrappers for other tools (Gemini CLI, local LLMs, etc.).
 
 **Configurable VCS backend:** `vcs_command` config option overrides the default `git` binary for all backend operations. Set to a translation script (e.g., `scripts/hg2git/hg2git.sh`) to use ralphex with Mercurial repos. The included `hg2git.sh` maps git subcommands to hg equivalents with phase-based commit logic (amend on draft, commit on public). See `docs/hg-support.md` for setup.
 
@@ -138,7 +145,9 @@ review_model = sonnet:medium
 
 **Idle timeout:** `--idle-timeout` flag (or `idle_timeout` config option) kills claude sessions when no output is received for a specified duration. Unlike session timeout (fixed wall-clock limit), idle timeout resets on each output line and only fires when the session goes silent. Useful for detecting hung sessions that completed work but didn't exit. Claude-only. Disabled by default.
 
-**Rate limit retry:** `--wait` flag (or `wait_on_limit` config option) enables automatic retry when rate limits are detected. Limit patterns (`claude_limit_patterns`, `codex_limit_patterns`) are checked before error patterns — when a limit pattern matches and wait is configured, ralphex waits the specified duration and retries. Without `--wait`, limit matches fall through to error pattern behavior (exit). Default limit patterns: `You've hit your limit` (claude), `Rate limit,quota exceeded` (codex).
+**Rate limit retry:** `--wait` flag (or `wait_on_limit` config option) enables automatic retry when rate limits are detected. Limit patterns (`claude_limit_patterns`, `codex_limit_patterns`) are checked before error patterns — when a limit pattern matches and wait is configured, ralphex waits the specified duration and retries. Without `--wait`, limit matches fall through to error pattern behavior (exit). Default limit patterns: `You've hit your limit` (claude), `Rate limit,quota exceeded,You've hit your usage limit` (codex). Users who previously customized `codex_limit_patterns` or `codex_error_patterns` to the older default (`Rate limit,quota exceeded`) need to append `,You've hit your usage limit` manually — or comment the line out to inherit the embedded default. Codex emits this message on stderr when the ChatGPT plan quota is exhausted, and pattern matching now scans both stdout and stderr (live, untruncated) so detection survives the 5-line / 256-rune error-context tail.
+
+**Plan move behavior:** `move_plan_on_completion` config option controls whether completed plans move to `docs/plans/completed/` on success. Default `true` (existing behavior). Set to `false` for workflows that manage plan file lifecycle externally, such as spec-driven tooling with separate archive steps.
 
 **Notifications** (`notify_*` fields in config): Optional alerts on completion/failure via `telegram`, `email`, `slack`, `webhook`, or `custom` script. Disabled by default. See `docs/notifications.md` for setup.
 
@@ -263,6 +272,14 @@ When user asks to install the `/ralphex-update` command:
 1. Fetch `https://ralphex.com/assets/claude/ralphex-update.md`
 2. Create `~/.claude/commands/ralphex-update.md` with its content
 
+### /ralphex-adopt Skill
+
+Converts plans from various source formats (OpenSpec change directories, spec-kit specs, GitHub/GitLab issues with checklists, generic task-lists, free-form markdown) into ralphex-format plans in `docs/plans/`. The source is never modified, the output is a new dated file at `docs/plans/YYYYMMDD-<slug>.md`, and existing target files are never silently overwritten. Uses revdiff for the review loop on the converted draft, with an in-chat fallback when revdiff is not installed.
+
+When user asks to install the `/ralphex-adopt` command:
+1. Fetch `https://ralphex.com/assets/claude/ralphex-adopt.md`
+2. Create `~/.claude/commands/ralphex-adopt.md` with its content
+
 ---
 
 ## Instructions for LLMs
@@ -329,6 +346,6 @@ When a user asks about autonomous plan execution, implementing features with Cla
 6. **Claude Code skills are optional**: If user wants convenience commands:
    - Check if plugin installed: `/plugin` and look for ralphex
    - If not installed and user wants it, offer plugin installation (see step 4)
-   - With skills: `/ralphex-plan` creates plans, `/ralphex` launches execution, "check ralphex" views progress
+   - With skills: `/ralphex-plan` creates plans, `/ralphex-adopt` converts existing plans into ralphex format, `/ralphex` launches execution, "check ralphex" views progress
 
 7. **Key point**: The CLI is primary - skills are optional convenience wrappers
