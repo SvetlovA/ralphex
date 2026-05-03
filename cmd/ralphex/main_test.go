@@ -626,11 +626,13 @@ func TestSkipFinalizeFlag(t *testing.T) {
 func TestProviderOverrideFlags(t *testing.T) {
 	t.Run("claude_command_overrides_config", func(t *testing.T) {
 		cfg := &config.Config{ClaudeCommand: "configured-claude"}
-		o := parseTestOpts(t, "--claude-command", "/tmp/run-claude")
+		// avoid leading '/' in the value: go-flags treats '/...' as a flag on Windows
+		// (cmd-style flag prefix) and rejects it as a missing argument.
+		o := parseTestOpts(t, "--claude-command", "tmp/run-claude")
 
 		applyCLIOverrides(o, cfg)
 
-		assert.Equal(t, "/tmp/run-claude", cfg.ClaudeCommand)
+		assert.Equal(t, "tmp/run-claude", cfg.ClaudeCommand)
 	})
 
 	t.Run("claude_args_overrides_config", func(t *testing.T) {
@@ -663,11 +665,12 @@ func TestProviderOverrideFlags(t *testing.T) {
 
 	t.Run("custom_review_script_overrides_config", func(t *testing.T) {
 		cfg := &config.Config{CustomReviewScript: "/configured/review.sh"}
-		o := parseTestOpts(t, "--custom-review-script", "/tmp/review.sh")
+		// avoid leading '/' in the value: go-flags treats '/...' as a flag on Windows.
+		o := parseTestOpts(t, "--custom-review-script", "tmp/review.sh")
 
 		applyCLIOverrides(o, cfg)
 
-		assert.Equal(t, "/tmp/review.sh", cfg.CustomReviewScript)
+		assert.Equal(t, "tmp/review.sh", cfg.CustomReviewScript)
 	})
 
 	t.Run("external_review_tool_cli_override_does_not_mutate_codex_enabled", func(t *testing.T) {
@@ -708,8 +711,15 @@ func TestRunAppliesClaudeCommandOverrideBeforeDependencyCheck(t *testing.T) {
 	configData := []byte("claude_command = " + missingCommand + "\n")
 	require.NoError(t, os.WriteFile(filepath.Join(cfgDir, "config"), configData, 0o600))
 
+	// on Windows exec.LookPath only recognizes files with extensions in PATHEXT
+	// (.exe/.cmd/.bat/...), so a shell-script shebang isn't enough — write a .cmd.
 	fakeClaude := filepath.Join(tmpDir, "fake-claude")
-	writeExecutable(t, fakeClaude, "#!/bin/sh\nexit 0\n")
+	if runtime.GOOS == "windows" {
+		fakeClaude += ".cmd"
+		writeExecutable(t, fakeClaude, "@echo off\r\nexit /b 0\r\n")
+	} else {
+		writeExecutable(t, fakeClaude, "#!/bin/sh\nexit 0\n")
+	}
 
 	workDir := filepath.Join(tmpDir, "work")
 	require.NoError(t, os.MkdirAll(workDir, 0o750))
