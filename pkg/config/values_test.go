@@ -66,9 +66,9 @@ func TestValuesLoader_Load_EmbeddedOnly(t *testing.T) {
 	assert.Equal(t, "docs/plans", values.PlansDir)
 	assert.Equal(t, "git", values.VcsCommand)
 	assert.Empty(t, values.CommitTrailer)
-	assert.Equal(t, []string{"You've hit your limit", "API Error:", "cannot be launched inside another Claude Code session", "Not logged in", "Your usage allocation has been disabled by your admin"}, values.ClaudeErrorPatterns)
+	assert.Equal(t, []string{"You've hit your limit", "API Error:", "cannot be launched inside another Claude Code session", "Not logged in", "Your usage allocation has been disabled by your admin", "You've hit your org's monthly usage limit"}, values.ClaudeErrorPatterns)
 	assert.Equal(t, []string{"Rate limit exceeded", "rate limit reached", "429 Too Many Requests", "quota exceeded", "insufficient_quota", "You've hit your usage limit"}, values.CodexErrorPatterns)
-	assert.Equal(t, []string{"You've hit your limit", "Your usage allocation has been disabled by your admin"}, values.ClaudeLimitPatterns)
+	assert.Equal(t, []string{"You've hit your limit", "Your usage allocation has been disabled by your admin", "You've hit your org's monthly usage limit"}, values.ClaudeLimitPatterns)
 	assert.Equal(t, []string{"Rate limit exceeded", "rate limit reached", "429 Too Many Requests", "quota exceeded", "insufficient_quota", "You've hit your usage limit"}, values.CodexLimitPatterns)
 	assert.Zero(t, values.WaitOnLimit)
 	assert.False(t, values.WaitOnLimitSet)
@@ -458,6 +458,67 @@ func TestValuesLoader_Load_LocalOverridesMovePlanOnCompletion(t *testing.T) {
 
 	assert.False(t, values.MovePlanOnCompletion)
 	assert.True(t, values.MovePlanOnCompletionSet)
+}
+
+func TestValues_mergeFrom_PreserveAnthropicAPIKey(t *testing.T) {
+	t.Run("set flag merges", func(t *testing.T) {
+		dst := Values{PreserveAnthropicAPIKey: false, PreserveAnthropicAPIKeySet: false}
+		src := Values{PreserveAnthropicAPIKey: true, PreserveAnthropicAPIKeySet: true}
+		dst.mergeFrom(&src)
+		assert.True(t, dst.PreserveAnthropicAPIKey)
+		assert.True(t, dst.PreserveAnthropicAPIKeySet)
+	})
+
+	t.Run("unset flag preserves dst", func(t *testing.T) {
+		dst := Values{PreserveAnthropicAPIKey: true, PreserveAnthropicAPIKeySet: true}
+		src := Values{PreserveAnthropicAPIKey: false, PreserveAnthropicAPIKeySet: false}
+		dst.mergeFrom(&src)
+		assert.True(t, dst.PreserveAnthropicAPIKey)
+		assert.True(t, dst.PreserveAnthropicAPIKeySet)
+	})
+
+	t.Run("local explicit false overrides global true", func(t *testing.T) {
+		// safety case: this is the whole reason the *Set sentinel exists.
+		// without it, a local config that omits the key would zero-value-overwrite
+		// a global true; with explicit false we must propagate the disable.
+		dst := Values{PreserveAnthropicAPIKey: true, PreserveAnthropicAPIKeySet: true}
+		src := Values{PreserveAnthropicAPIKey: false, PreserveAnthropicAPIKeySet: true}
+		dst.mergeFrom(&src)
+		assert.False(t, dst.PreserveAnthropicAPIKey)
+		assert.True(t, dst.PreserveAnthropicAPIKeySet)
+	})
+
+	t.Run("local file overrides global through Load", func(t *testing.T) {
+		// end-to-end check: global sets true, local sets false → local wins.
+		// guards against a refactor that drops the sentinel handling.
+		tmpDir := t.TempDir()
+		globalCfg := filepath.Join(tmpDir, "global")
+		localCfg := filepath.Join(tmpDir, "local")
+		require.NoError(t, os.WriteFile(globalCfg, []byte(`preserve_anthropic_api_key = true`), 0o600))
+		require.NoError(t, os.WriteFile(localCfg, []byte(`preserve_anthropic_api_key = false`), 0o600))
+
+		loader := newValuesLoader(defaultsFS)
+		values, err := loader.Load(localCfg, globalCfg)
+		require.NoError(t, err)
+		assert.False(t, values.PreserveAnthropicAPIKey)
+		assert.True(t, values.PreserveAnthropicAPIKeySet)
+	})
+
+	t.Run("local omitted preserves global true", func(t *testing.T) {
+		// the converse case: a local file that doesn't mention the key must not
+		// silently strip a globally-enabled passthrough.
+		tmpDir := t.TempDir()
+		globalCfg := filepath.Join(tmpDir, "global")
+		localCfg := filepath.Join(tmpDir, "local")
+		require.NoError(t, os.WriteFile(globalCfg, []byte(`preserve_anthropic_api_key = true`), 0o600))
+		require.NoError(t, os.WriteFile(localCfg, []byte(`# unrelated comment`), 0o600))
+
+		loader := newValuesLoader(defaultsFS)
+		values, err := loader.Load(localCfg, globalCfg)
+		require.NoError(t, err)
+		assert.True(t, values.PreserveAnthropicAPIKey)
+		assert.True(t, values.PreserveAnthropicAPIKeySet)
+	})
 }
 
 func TestValues_mergeFrom_MovePlanOnCompletion(t *testing.T) {

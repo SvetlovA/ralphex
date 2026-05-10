@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.1.1 - 2026-05-04
+
+### Improved
+
+- Update all dependencies c43c5c0
+
+### Fixed
+
+- Ignore checkboxes inside fenced code blocks in plan parser #329 @umputun
+
 ## v1.1.0 - 2026-05-03
 
 ### New Features

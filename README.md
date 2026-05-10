@@ -566,6 +566,9 @@ ralphex --session-timeout=30m docs/plans/feature.md
 # kill claude session when no output for 5 minutes (idle detection)
 ralphex --idle-timeout=5m docs/plans/feature.md
 
+# preserve ANTHROPIC_API_KEY in the claude child env (for API-key auth users)
+ralphex --preserve-anthropic-api-key docs/plans/feature.md
+
 # with web dashboard
 ralphex --serve docs/plans/feature.md
 
@@ -596,6 +599,7 @@ ralphex --serve --port=3000 docs/plans/feature.md
 | `--session-timeout` | Per-session timeout for claude (e.g., `30m`, `1h`). Kills hanging sessions | disabled |
 | `--idle-timeout` | Kill claude session when no output for specified duration (e.g., `5m`). Resets on each output line | disabled |
 | `--worktree` | Run in isolated git worktree (full and tasks-only modes only) | false |
+| `--preserve-anthropic-api-key` | Pass `ANTHROPIC_API_KEY` through to claude (for users authenticating Claude Code via API key rather than OAuth/keychain) | false |
 | `--plan` | Create plan interactively (provide description) | - |
 | `-s, --serve` | Start web dashboard for real-time streaming | false |
 | `-p, --port` | Web dashboard port (used with `--serve`) | 8080 |
@@ -841,6 +845,7 @@ Provider-related CLI flags (`--claude-command`, `--claude-args`, `--external-rev
 | `finalize_enabled` | Enable finalize step after reviews | `false` |
 | `move_plan_on_completion` | Move completed plan file into `docs/plans/completed/` on success (disable for external plan-lifecycle workflows) | `true` |
 | `use_worktree` | Run each plan in an isolated git worktree (full and tasks-only modes only) | `false` |
+| `preserve_anthropic_api_key` | Pass `ANTHROPIC_API_KEY` through to the claude child process (for users authenticating Claude Code via API key rather than OAuth/keychain). Default `false` strips the key so a host-set value cannot silently override OAuth credentials | `false` |
 | `plans_dir` | Plans directory | `docs/plans` |
 | `default_branch` | Override auto-detected default branch for review diffs | auto-detect |
 | `vcs_command` | VCS command for the git backend (set to a translation script for hg repos) | `git` |
@@ -854,9 +859,9 @@ Provider-related CLI flags (`--claude-command`, `--claude-args`, `--external-rev
 | `color_signal` | Completion/failure signals color (hex) | `#ff6464` |
 | `color_timestamp` | Timestamp prefix color (hex) | `#8a8a8a` |
 | `color_info` | Informational messages color (hex) | `#b4b4b4` |
-| `claude_error_patterns` | Patterns to detect in claude output (comma-separated) | `You've hit your limit,API Error:,cannot be launched inside another Claude Code session,Not logged in,Your usage allocation has been disabled by your admin` |
+| `claude_error_patterns` | Patterns to detect in claude output (comma-separated) | `You've hit your limit,API Error:,cannot be launched inside another Claude Code session,Not logged in,Your usage allocation has been disabled by your admin,You've hit your org's monthly usage limit` |
 | `codex_error_patterns` | Patterns to detect in codex output (comma-separated) | `Rate limit exceeded,rate limit reached,429 Too Many Requests,quota exceeded,insufficient_quota,You've hit your usage limit` |
-| `claude_limit_patterns` | Limit patterns for claude triggering wait+retry (comma-separated) | `You've hit your limit,Your usage allocation has been disabled by your admin` |
+| `claude_limit_patterns` | Limit patterns for claude triggering wait+retry (comma-separated) | `You've hit your limit,Your usage allocation has been disabled by your admin,You've hit your org's monthly usage limit` |
 | `codex_limit_patterns` | Limit patterns for codex triggering wait+retry (comma-separated) | `Rate limit exceeded,rate limit reached,429 Too Many Requests,quota exceeded,insufficient_quota,You've hit your usage limit` |
 | `wait_on_limit` | Wait duration before retrying on rate limit (e.g., `1h`, `30m`) | disabled |
 | `session_timeout` | Per-session timeout for claude (e.g., `30m`, `1h`). Kills hanging sessions | disabled |
@@ -970,6 +975,8 @@ Working examples are included:
 
 - [`scripts/codex-as-claude/codex-as-claude.sh`](https://github.com/umputun/ralphex/blob/master/scripts/codex-as-claude/codex-as-claude.sh) wraps codex to produce Claude-compatible events
 - [`scripts/copilot-as-claude/copilot-as-claude.sh`](https://github.com/umputun/ralphex/blob/master/scripts/copilot-as-claude/copilot-as-claude.sh) wraps GitHub Copilot CLI and translates its native JSONL stream into Claude-compatible events
+- [`scripts/gemini-as-claude/gemini-as-claude.sh`](https://github.com/umputun/ralphex/blob/master/scripts/gemini-as-claude/gemini-as-claude.sh) wraps Gemini CLI for the implementation slot
+- [`scripts/opencode/opencode-as-claude.sh`](https://github.com/umputun/ralphex/blob/master/scripts/opencode/opencode-as-claude.sh) wraps OpenCode CLI for the implementation slot, and `scripts/opencode/opencode-review.sh` is shipped alongside as a turn-key custom review script
 
 To use the included Copilot wrapper:
 
@@ -1008,6 +1015,27 @@ Provider-specific environment variables:
 - `CODEX_VERBOSE` - set to `1` to include command execution output in the stream (default: `0`, only agent messages are shown)
 
 See [custom providers documentation](https://github.com/umputun/ralphex/blob/master/docs/custom-providers.md) for a detailed guide on writing wrappers for other providers.
+
+### Swapping Implementation and Review Roles
+
+The default pairing is Claude for implementation and Codex for external review. The same mechanisms that replace Claude with another tool can also flip the roles, putting another tool in the implementation slot and Claude (or anything else) in the review slot. Combine `claude_command` with `external_review_tool = custom` and `custom_review_script`:
+
+```ini
+# in ~/.config/ralphex/config or .ralphex/config
+claude_command       = /path/to/scripts/codex-as-claude/codex-as-claude.sh
+external_review_tool = custom
+custom_review_script = /path/to/scripts/opencode/opencode-review.sh
+```
+
+The `claude_command` slot is documented above. The `custom_review_script` slot, including the script interface and expected output format, is documented in [Custom External Review](#custom-external-review).
+
+The repository ships a working custom review script at [`scripts/opencode/opencode-review.sh`](https://github.com/umputun/ralphex/blob/master/scripts/opencode/opencode-review.sh) that uses OpenCode CLI to produce review findings. Use it directly, or read it as a template when writing your own (for example, a `claude-as-review.sh` that calls Claude in the review slot).
+
+The wrappers under `scripts/codex-as-claude/`, `scripts/copilot-as-claude/`, `scripts/gemini-as-claude/`, and `scripts/opencode/` ship in the source tree but are not bundled with the binary. Vendor the one you need into your project (`.ralphex/scripts/`) or reference it from a checkout.
+
+**Log labels reflect the slot, not the underlying tool.** Phase output keeps the internal slot names (`claude execution`, `codex execution`) regardless of what `claude_command` and the external review tool resolve to at runtime. With a wrapper in place, "claude execution" means whatever `claude_command` points at.
+
+**Per-project config on feature branches.** If tool-swap configuration lives inside the project (`.ralphex/config`, scripts under `.ralphex/scripts/`), commit those files on the default branch before creating a feature branch. Otherwise the reviewer sees its own infrastructure as new in the feature branch, which can trigger `RALPHEX:TASK_FAILED` when project rules forbid modifying `.ralphex/`. Keeping the configuration in `~/.config/ralphex/` instead avoids that case entirely.
 
 ### Configurable VCS Backend
 

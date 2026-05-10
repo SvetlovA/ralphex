@@ -295,6 +295,7 @@ GOOS=windows GOARCH=amd64 go build ./...
 - `session_timeout` config option: per-session timeout for claude (e.g., "30m", "1h"). Kills hanging sessions and continues to next iteration. CLI flag `--session-timeout` takes precedence. Disabled by default
 - `idle_timeout` config option: kills claude sessions when no output for specified duration (e.g., "5m"). Resets on each output line, only fires when session goes silent. CLI flag `--idle-timeout` takes precedence. Disabled by default
 - `move_plan_on_completion` config option: controls whether completed plans move to `docs/plans/completed/` on success. Default `true`. Disable for workflows that manage plan lifecycle externally (spec-driven tooling with separate archive steps)
+- `preserve_anthropic_api_key` config option / `--preserve-anthropic-api-key` CLI flag: when true, `ANTHROPIC_API_KEY` is passed through to the child claude process. Required for users who authenticate Claude Code via API key rather than OAuth/keychain. Default `false` strips the key so a host-set value cannot silently override OAuth credentials and bill a different account. The merge sentinel `PreserveAnthropicAPIKeySet` lives only on `Values` (load-bearing for local-overrides-global merge); `Config` carries the resolved bool only. Plumbed: `Config.PreserveAnthropicAPIKey` → `pkg/processor/runner.go` → `ClaudeExecutor.PreserveAPIKey` → `execClaudeRunner.preserveAPIKey` → `claudeChildEnv()` in `pkg/executor/executor.go`. When enabled, the startup banner emits `auth: ANTHROPIC_API_KEY passthrough enabled` (in both task-execution and plan-creation modes) so users can spot wrong-context runs before claude bills the wrong account. CLAUDECODE is always stripped regardless of this flag (prevents nested-session errors)
 
 ### Local Project Config (.ralphex/)
 
@@ -328,7 +329,7 @@ project/
 ### Error Pattern Detection
 
 Configurable patterns detect rate limit and quota errors in claude/codex output:
-- `claude_error_patterns`: comma-separated patterns for claude (default: "You've hit your limit,API Error:,cannot be launched inside another Claude Code session,Not logged in,Your usage allocation has been disabled by your admin")
+- `claude_error_patterns`: comma-separated patterns for claude (default: "You've hit your limit,API Error:,cannot be launched inside another Claude Code session,Not logged in,Your usage allocation has been disabled by your admin,You've hit your org's monthly usage limit")
 - `codex_error_patterns`: comma-separated patterns for codex (default: "Rate limit exceeded,rate limit reached,429 Too Many Requests,quota exceeded,insufficient_quota,You've hit your usage limit"). Phrases are tightened so codex review findings that *talk about* rate limiting in a codebase do not trip a false positive when codex exits non-zero for an unrelated reason
 - Matching is case-insensitive substring search
 - Whitespace is trimmed from each pattern
@@ -338,7 +339,7 @@ Configurable patterns detect rate limit and quota errors in claude/codex output:
 - On match, ralphex exits gracefully with pattern info and help command suggestion
 
 Limit patterns for wait+retry behavior:
-- `claude_limit_patterns`: comma-separated (default: "You've hit your limit,Your usage allocation has been disabled by your admin")
+- `claude_limit_patterns`: comma-separated (default: "You've hit your limit,Your usage allocation has been disabled by your admin,You've hit your org's monthly usage limit")
 - `codex_limit_patterns`: comma-separated (default: "Rate limit exceeded,rate limit reached,429 Too Many Requests,quota exceeded,insufficient_quota,You've hit your usage limit")
 - `wait_on_limit`: duration string (e.g., "1h", "30m"), disabled by default
 - `--wait` CLI flag overrides `wait_on_limit` config
