@@ -1,5 +1,23 @@
 # Changelog
 
+## v1.2.0 - 2026-05-12
+
+### New Features
+
+- Detect org's monthly usage limit in claude output #338 @umputun
+- Add `preserve_anthropic_api_key` option for API-key auth (#333) #335 @rsolmano
+
+### Improved
+
+- Document tool-swap setup and list missing wrappers 6d3c63d
+- Bump golang.org/x/sys from 0.43.0 to 0.44.0 #340 @dependabot
+- Bump golang.org/x/term from 0.42.0 to 0.43.0 #339 @dependabot
+
+### Fixed
+
+- Tolerate plan file rename during execution #342 @umputun
+- Pre-initialize config dir #304 @Semior001
+
 ## v1.1.1 - 2026-05-04
 
 ### Improved

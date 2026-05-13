@@ -310,6 +310,105 @@ func TestRunner_resolvePlanFilePath(t *testing.T) {
 		assert.Contains(t, r.getGoal(), completedPath)
 		assert.NotContains(t, r.getGoal(), originalPath)
 	})
+
+	t.Run("dashed file moved+renamed to compact in completed", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		plansDir := filepath.Join(tmpDir, "docs", "plans")
+		completedDir := filepath.Join(plansDir, "completed")
+		require.NoError(t, os.MkdirAll(completedDir, 0o700))
+
+		originalPath := filepath.Join(plansDir, "2026-05-12-foo.md")
+		renamedPath := filepath.Join(completedDir, "20260512-foo.md")
+		require.NoError(t, os.WriteFile(renamedPath, []byte("# plan"), 0o600))
+
+		r := &Runner{cfg: Config{PlanFile: originalPath}}
+		assert.Equal(t, renamedPath, r.resolvePlanFilePath())
+	})
+
+	t.Run("compact file moved+renamed to dashed in completed", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		plansDir := filepath.Join(tmpDir, "docs", "plans")
+		completedDir := filepath.Join(plansDir, "completed")
+		require.NoError(t, os.MkdirAll(completedDir, 0o700))
+
+		originalPath := filepath.Join(plansDir, "20260512-foo.md")
+		renamedPath := filepath.Join(completedDir, "2026-05-12-foo.md")
+		require.NoError(t, os.WriteFile(renamedPath, []byte("# plan"), 0o600))
+
+		r := &Runner{cfg: Config{PlanFile: originalPath}}
+		assert.Equal(t, renamedPath, r.resolvePlanFilePath())
+	})
+
+	t.Run("non-date basename returns original path", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		plansDir := filepath.Join(tmpDir, "docs", "plans")
+		completedDir := filepath.Join(plansDir, "completed")
+		require.NoError(t, os.MkdirAll(completedDir, 0o700))
+
+		// file does not exist at original location, completed/, or any alternate; helper
+		// returns "" because basename matches neither date pattern.
+		originalPath := filepath.Join(plansDir, "feature-x.md")
+		r := &Runner{cfg: Config{PlanFile: originalPath}}
+		assert.Equal(t, originalPath, r.resolvePlanFilePath())
+	})
+
+	t.Run("dashed file renamed in place to compact (same dir)", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		plansDir := filepath.Join(tmpDir, "docs", "plans")
+		require.NoError(t, os.MkdirAll(plansDir, 0o700))
+
+		originalPath := filepath.Join(plansDir, "2026-05-12-foo.md")
+		renamedPath := filepath.Join(plansDir, "20260512-foo.md")
+		require.NoError(t, os.WriteFile(renamedPath, []byte("# plan"), 0o600))
+
+		r := &Runner{cfg: Config{PlanFile: originalPath}}
+		assert.Equal(t, renamedPath, r.resolvePlanFilePath())
+	})
+
+	t.Run("compact file renamed in place to dashed (same dir)", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		plansDir := filepath.Join(tmpDir, "docs", "plans")
+		require.NoError(t, os.MkdirAll(plansDir, 0o700))
+
+		originalPath := filepath.Join(plansDir, "20260512-foo.md")
+		renamedPath := filepath.Join(plansDir, "2026-05-12-foo.md")
+		require.NoError(t, os.WriteFile(renamedPath, []byte("# plan"), 0o600))
+
+		r := &Runner{cfg: Config{PlanFile: originalPath}}
+		assert.Equal(t, renamedPath, r.resolvePlanFilePath())
+	})
+
+	t.Run("in-place alt wins over stale completed copy", func(t *testing.T) {
+		// when both an in-place alt-format file and a completed/<basename> exist,
+		// the in-place alt takes precedence (it is the current file, the completed/ copy is stale)
+		tmpDir := t.TempDir()
+		plansDir := filepath.Join(tmpDir, "docs", "plans")
+		completedDir := filepath.Join(plansDir, "completed")
+		require.NoError(t, os.MkdirAll(completedDir, 0o700))
+
+		originalPath := filepath.Join(plansDir, "2026-05-12-foo.md")
+		inPlaceAlt := filepath.Join(plansDir, "20260512-foo.md")
+		staleCompleted := filepath.Join(completedDir, "2026-05-12-foo.md")
+		require.NoError(t, os.WriteFile(inPlaceAlt, []byte("# current"), 0o600))
+		require.NoError(t, os.WriteFile(staleCompleted, []byte("# stale"), 0o600))
+
+		r := &Runner{cfg: Config{PlanFile: originalPath}}
+		assert.Equal(t, inPlaceAlt, r.resolvePlanFilePath())
+	})
+
+	t.Run("8-digit non-date prefix is treated as date", func(t *testing.T) {
+		// pins behavior of the loose compact regex: it does not validate that the 8 digits
+		// form a real calendar date. helper produces a candidate, but file-not-found
+		// short-circuits before any harm and the fallback returns the original path.
+		tmpDir := t.TempDir()
+		plansDir := filepath.Join(tmpDir, "docs", "plans")
+		completedDir := filepath.Join(plansDir, "completed")
+		require.NoError(t, os.MkdirAll(completedDir, 0o700))
+
+		originalPath := filepath.Join(plansDir, "12345678-foo.md")
+		r := &Runner{cfg: Config{PlanFile: originalPath}}
+		assert.Equal(t, originalPath, r.resolvePlanFilePath())
+	})
 }
 
 func TestRunner_getProgressFileRef(t *testing.T) {

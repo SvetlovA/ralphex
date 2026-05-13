@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/umputun/ralphex/pkg/config"
+	"github.com/umputun/ralphex/pkg/plan"
 )
 
 // agentRefPattern matches {{agent:name}} template syntax
@@ -29,8 +30,11 @@ func (r *Runner) getPlanFileRef() string {
 	return r.resolvePlanFilePath()
 }
 
-// resolvePlanFilePath returns the actual path to the plan file, checking if it was moved to completed/.
-// returns original path if file exists there, completed/ path if moved, or original path as fallback.
+// resolvePlanFilePath returns the actual path to the plan file, checking if it was moved or renamed.
+// probes in order: original path, <dir>/<alt-date-basename> (in-place rename),
+// completed/<basename> (moved), completed/<alt-date-basename> (moved + renamed).
+// the YYYY-MM-DD ↔ YYYYMMDD swap handles LLM-driven date-format renames.
+// returns the first path that exists, or the original path as fallback.
 func (r *Runner) resolvePlanFilePath() string {
 	if r.cfg.PlanFile == "" {
 		return ""
@@ -46,10 +50,30 @@ func (r *Runner) resolvePlanFilePath() string {
 		return r.cfg.PlanFile
 	}
 
+	dir := filepath.Dir(r.cfg.PlanFile)
+	base := filepath.Base(r.cfg.PlanFile)
+	altBase := plan.AltDateBasename(base)
+
+	// check if file was renamed in place to the alternate date format (same directory)
+	// done before completed/ probes so a current renamed file wins over a stale completed/ copy
+	if altBase != "" {
+		if _, err := os.Stat(filepath.Join(dir, altBase)); err == nil {
+			return filepath.Join(dir, altBase)
+		}
+	}
+
 	// check if file was moved to completed/ subdirectory
-	completedPath := filepath.Join(filepath.Dir(r.cfg.PlanFile), "completed", filepath.Base(r.cfg.PlanFile))
+	completedPath := filepath.Join(dir, "completed", base)
 	if _, err := os.Stat(completedPath); err == nil {
 		return completedPath
+	}
+
+	// check if file was moved and renamed to the alternate date format in completed/
+	if altBase != "" {
+		altCompletedPath := filepath.Join(dir, "completed", altBase)
+		if _, err := os.Stat(altCompletedPath); err == nil {
+			return altCompletedPath
+		}
 	}
 
 	// fall back to original path

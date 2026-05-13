@@ -448,6 +448,14 @@ func (s *Service) RemoveWorktree(path string) error {
 // Creates the completed/ directory if it doesn't exist.
 // Uses git mv if the file is tracked, falls back to os.Rename for untracked files.
 // If the source file doesn't exist but the destination does, logs a message and returns nil.
+// Also returns nil when the source is missing and a basename with the alternate date-prefix
+// convention (YYYY-MM-DD ↔ YYYYMMDD) exists in completed/, treating an LLM-driven
+// date-format rename as already-moved.
+// When the source is missing but a file with the alternate date-prefix exists alongside it
+// (in-place rename, e.g. git mv 2026-05-12-foo.md 20260512-foo.md), the renamed file is
+// used as the source so the move can complete with its current name. If an alternate-date
+// copy already exists at the destination (e.g. from a prior same-day run with the same slug),
+// the move is skipped so neither file is clobbered.
 func (s *Service) MovePlanToCompleted(planFile string) error {
 	// create completed directory
 	completedDir := filepath.Join(filepath.Dir(planFile), "completed")
@@ -455,21 +463,15 @@ func (s *Service) MovePlanToCompleted(planFile string) error {
 		return fmt.Errorf("create completed dir: %w", err)
 	}
 
-	// destination path
-	destPath := filepath.Join(completedDir, filepath.Base(planFile))
-
-	// check if already moved (source missing, dest exists)
-	if _, err := os.Stat(planFile); os.IsNotExist(err) {
-		if _, destErr := os.Stat(destPath); destErr == nil {
-			s.log.Printf("plan already in completed/\n")
-			return nil
-		}
+	sourceFile, destPath, done := s.resolvePlanMoveTargets(planFile, completedDir)
+	if done {
+		return nil
 	}
 
 	// use git mv
-	if err := s.repo.moveFile(planFile, destPath); err != nil {
+	if err := s.repo.moveFile(sourceFile, destPath); err != nil {
 		// fallback to regular move for untracked files
-		if renameErr := os.Rename(planFile, destPath); renameErr != nil {
+		if renameErr := os.Rename(sourceFile, destPath); renameErr != nil {
 			return fmt.Errorf("move plan: %w", renameErr)
 		}
 		// stage the new location - log if fails but continue
@@ -479,13 +481,72 @@ func (s *Service) MovePlanToCompleted(planFile string) error {
 	}
 
 	// commit the move
-	commitMsg := "move completed plan: " + filepath.Base(planFile)
+	commitMsg := "move completed plan: " + filepath.Base(sourceFile)
 	if err := s.repo.commit(s.appendTrailer(commitMsg)); err != nil {
 		return fmt.Errorf("commit plan move: %w", err)
 	}
 
 	s.log.Printf("moved plan to %s\n", destPath)
 	return nil
+}
+
+// resolvePlanMoveTargets determines the source and destination for MovePlanToCompleted,
+// accounting for files already moved to completed/ or renamed between the dashed
+// (YYYY-MM-DD) and compact (YYYYMMDD) date-prefix conventions. Returns done=true in
+// two cases: the file is already in completed/ (with either basename), or there is a
+// collision between an active in-place rename and a stale completed/<altBase> copy
+// that the move should not clobber.
+// Probe order mirrors resolvePlanFilePath in pkg/processor/prompts.go: the in-place
+// alternate source is checked before any completed/ probe so a current renamed file
+// wins over a stale completed/ copy left from a prior run.
+func (s *Service) resolvePlanMoveTargets(planFile, completedDir string) (sourceFile, destPath string, done bool) {
+	destPath = filepath.Join(completedDir, filepath.Base(planFile))
+	sourceFile = planFile
+
+	if _, err := os.Stat(planFile); !os.IsNotExist(err) {
+		return sourceFile, destPath, false
+	}
+
+	altBase := plan.AltDateBasename(filepath.Base(planFile))
+
+	// file may have been renamed in place (same dir, alt basename) — use it as source.
+	// checked before completed/ probes so a current renamed file wins over a stale
+	// completed/<original> copy from a prior run.
+	if altBase != "" {
+		altSourcePath := filepath.Join(filepath.Dir(planFile), altBase)
+		if _, altSrcErr := os.Stat(altSourcePath); altSrcErr == nil {
+			altDestPath := filepath.Join(completedDir, altBase)
+			// collision: a stale completed/<altBase> exists alongside the active in-place
+			// renamed source (e.g. same slug ran twice on the same day). git mv would refuse
+			// because dest exists, and the os.Rename fallback would clobber the stale copy
+			// while leaving the source's deletion unstaged — repo ends up dirty or commit
+			// fails entirely. surface as already-completed instead and preserve both files
+			// for manual resolution.
+			if _, altDestErr := os.Stat(altDestPath); altDestErr == nil {
+				s.log.Printf("plan already in completed/ (renamed: %s); active copy at %s left in place for manual cleanup\n",
+					altBase, altSourcePath)
+				return altSourcePath, altDestPath, true
+			}
+			return altSourcePath, altDestPath, false
+		}
+	}
+
+	if _, destErr := os.Stat(destPath); destErr == nil {
+		s.log.Printf("plan already in completed/\n")
+		return sourceFile, destPath, true
+	}
+
+	if altBase == "" {
+		return sourceFile, destPath, false
+	}
+
+	altDestPath := filepath.Join(completedDir, altBase)
+	if _, altErr := os.Stat(altDestPath); altErr == nil {
+		s.log.Printf("plan already in completed/ (renamed: %s)\n", altBase)
+		return sourceFile, destPath, true
+	}
+
+	return sourceFile, destPath, false
 }
 
 // EnsureHasCommits checks that the repository has at least one commit.
