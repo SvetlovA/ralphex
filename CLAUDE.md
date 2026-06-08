@@ -231,7 +231,7 @@ GOOS=windows GOARCH=amd64 go build ./...
 - Precedence: CLI flags > local config > global config > embedded defaults
 - Custom prompts: `~/.config/ralphex/prompts/*.txt` or `.ralphex/prompts/*.txt`
 - Custom agents: `~/.config/ralphex/agents/*.txt` or `.ralphex/agents/*.txt`
-- `plan_model` / `task_model` / `review_model` config options: `model[:effort]` for plan creation / task / review phases; `plan_model` and `review_model` fall back to `task_model`. CLI flags `--plan-model`/`--task-model`/`--review-model` take precedence. Parsed by `ParseModelEffort` (pkg/processor/executor_factory.go). See the Key Patterns bullet for claude- vs codex-executor behavior. Disabled by default (empty = Claude CLI defaults)
+- `plan_model` / `task_model` / `review_model` config options: `model[:effort]` for plan creation / task / review phases; `plan_model` and `review_model` fall back to `task_model`. CLI flags `--plan-model`/`--task-model`/`--review-model` take precedence. Parsed by executor setup (pkg/processor/executor_factory.go). See the Key Patterns bullet for claude- vs codex-executor behavior. Disabled by default (empty = Claude CLI defaults)
 - `default_branch` config option: override auto-detected default branch for review diffs
 - `max_iterations` config option: override CLI default (50) for maximum task iterations per plan (CLI flag `--max-iterations` takes precedence)
 - `vcs_command` config option: override the VCS binary used by the git backend (default: `"git"`). Set to a translation script path (e.g., `scripts/hg2git/hg2git.sh`) to use ralphex with Mercurial repos. See `docs/hg-support.md`
@@ -239,7 +239,7 @@ GOOS=windows GOARCH=amd64 go build ./...
 - Notification config: `notify_channels`, `notify_on_error`, `notify_on_complete`, `notify_timeout_ms`, plus channel-specific `notify_*` fields (see `docs/notifications.md`)
 - `review_patience` config option: terminate external review after N consecutive unchanged rounds (0 = disabled). CLI flag `--review-patience` takes precedence
 - `wait_on_limit` config option: duration to wait before retrying on rate limit (e.g., "1h", "30m"). CLI flag `--wait` takes precedence. Disabled by default
-- `session_timeout` config option: per-session timeout (e.g., "30m"). Applies to claude in default mode and to every executor call under `--codex` (task/review/finalize/eval); external codex/custom review in Claude mode is not affected. Kills hanging sessions, continues to next iteration. Applied in `executionPolicy.runWithSessionTimeout` via `context.WithTimeout`, gated on `Executor==ExecutorCodex || toolName=="claude"`. CLI flag `--session-timeout` takes precedence. Disabled by default
+- `session_timeout` config option: per-session timeout (e.g., "30m"). Applies to claude in default mode and to every executor call under `--codex` (task/review/finalize/eval); external codex/custom review in Claude mode is not affected. Kills hanging sessions, continues to next iteration. Applied in `retryPolicy.runWithSessionTimeout` via `context.WithTimeout`, gated on `Executor==ExecutorCodex || toolName=="claude"`. CLI flag `--session-timeout` takes precedence. Disabled by default
 - `idle_timeout` config option: kills claude/codex executor sessions when no output for a given duration (e.g., "5m"). Resets on each output line; only fires when the session goes silent. Implemented in `ClaudeExecutor.Run()`/`CodexExecutor.Run()` via `time.AfterFunc`. Wired by `buildCodexExecutor` for first-class `--codex`; NOT by `buildExternalCodexExecutor`, so external codex review in default-claude mode has no idle timeout. Custom external review unaffected. CLI flag `--idle-timeout` takes precedence. Disabled by default
 - `move_plan_on_completion` config option: controls whether completed plans move to `docs/plans/completed/` on success. Default `true`. Disable for workflows that manage plan lifecycle externally (spec-driven tooling with separate archive steps)
 - `preserve_anthropic_api_key` config option / `--preserve-anthropic-api-key` CLI flag: when true, `ANTHROPIC_API_KEY` is passed through to the child claude process (needed for API-key auth rather than OAuth/keychain). Default `false` strips the key. The merge sentinel `PreserveAnthropicAPIKeySet` lives only on `Values` (load-bearing for local-overrides-global merge); `Config` carries the resolved bool. Plumbed: `Config.PreserveAnthropicAPIKey` → `pkg/processor/executor_factory.go` → `ClaudeExecutor.PreserveAPIKey` → `execClaudeRunner.preserveAPIKey` → `claudeChildEnv()` (`pkg/executor/executor.go`). When enabled, the startup banner emits `auth: ANTHROPIC_API_KEY passthrough enabled`. `CLAUDECODE` is always stripped regardless (prevents nested-session errors)
@@ -284,19 +284,25 @@ Configurable patterns detect rate limit and quota errors in claude/codex output:
 - For custom executors: stderr is merged into stdout by the executor itself (`cmd.Stderr = cmd.Stdout`), so the same pattern check covers both streams. Patterns checked only when process exits non-zero and context is not canceled
 - On match, ralphex exits gracefully with pattern info and help command suggestion
 
+Transient retry patterns for wrapper-level stalls:
+- `claude_retry_patterns`: comma-separated transient Claude/fya markers retried like executor timeouts. Default: `FYA_TRANSIENT_TIMEOUT`
+- Retry patterns are checked before limit and error patterns. They do not use `wait_on_limit`; the phase receives timeout-style metadata and applies its existing bounded retry behavior
+- Retry detection is suppressed when `result.Signal` is non-empty: a completed run that emitted a structured signal (e.g. `ALL_TASKS_DONE`) must not be discarded and re-run just because the output text mentions a retry marker. `patternError(recentText, signal)` (`pkg/executor/executor.go`) gates only the retry tier on the signal; limit and error patterns still fire regardless (they surface loudly rather than silently re-running)
+
 Limit patterns for wait+retry behavior:
 - `claude_limit_patterns` / `codex_limit_patterns`: comma-separated limit patterns (default strings in `llms.txt` and the embedded config)
 - `wait_on_limit`: duration string (e.g., "1h", "30m"), disabled by default
 - `--wait` CLI flag overrides `wait_on_limit` config
-- Priority: limit patterns checked first; if match AND wait > 0, wait and retry; if match AND wait == 0, fall through to error pattern behavior
+- Priority: retry patterns checked first, then limit patterns; if a limit pattern matches AND wait > 0, wait and retry; if match AND wait == 0, fall through to error pattern behavior
 - Limit patterns intentionally overlap with error patterns — `wait_on_limit` acts as the toggle
 
 Implementation:
 - `PatternMatchError` type in `pkg/executor/executor.go` with `Pattern` and `HelpCmd` fields
 - `LimitPatternError` type in `pkg/executor/executor.go` with `Pattern` and `HelpCmd` fields
-- `matchPattern()` helper for case-insensitive matching (used by both error and limit pattern checks)
-- Patterns passed via `ClaudeExecutor.ErrorPatterns`/`LimitPatterns` and `CodexExecutor.ErrorPatterns`/`LimitPatterns`
-- `executionPolicy.Run()` in `pkg/processor/execution_policy.go` wraps executor calls with retry logic
+- `RetryPatternError` type in `pkg/executor/executor.go` with a `Pattern` field
+- `matchPattern()` helper for case-insensitive matching (used by error, limit, and retry pattern checks)
+- Patterns passed via `ClaudeExecutor.ErrorPatterns`/`LimitPatterns`/`RetryPatterns` and `CodexExecutor.ErrorPatterns`/`LimitPatterns` (codex has no retry patterns)
+- `retryPolicy.Run()` in `pkg/processor/execution_policy.go` wraps executor calls with retry logic
 
 ### Agent System
 
