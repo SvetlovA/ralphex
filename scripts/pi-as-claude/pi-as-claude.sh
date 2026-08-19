@@ -72,10 +72,12 @@ model="$model_flag"
 
 # resolve thinking level: explicit --effort flag wins over PI_THINKING env.
 # pi accepts off|minimal|low|medium|high|xhigh|max; ralphex's effort levels pass
-# through verbatim and pi validates them.
+# through verbatim. pi does not reject an unknown level - it warns and keeps its
+# own default - and it clamps a known level to what the model exposes, so the
+# level that runs may differ from the one requested.
 thinking=""
 if [[ -n "$effort_flag" ]]; then
-    thinking="$effort_flag" # passthrough; pi validates the rest
+    thinking="$effort_flag" # passthrough; see the note above on pi's handling
 elif [[ -n "$PI_THINKING" ]]; then
     thinking="$PI_THINKING"
 fi
