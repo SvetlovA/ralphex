@@ -17,13 +17,13 @@ jobs:
           persist-credentials: false
 
       - name: set up go 1.26
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version: "1.26"
         id: go
 
       - name: install playwright browsers
-        run: go run github.com/playwright-community/playwright-go/cmd/playwright@latest install --with-deps chromium
+        run: go run github.com/mxschmitt/playwright-go/cmd/playwright@latest install --with-deps chromium
 
       - name: run e2e tests
         run: go test -tags=e2e -count=1 -v -timeout=300s ./e2e/...

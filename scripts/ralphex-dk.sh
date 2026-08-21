@@ -39,6 +39,7 @@ Environment variables:
   RALPHEX_PORT           Web dashboard port with --serve (default: 8080)
   RALPHEX_DOCKER_SOCKET  Enable Docker socket mount ("1", "true", "yes")
   RALPHEX_DOCKER_NETWORK Docker network mode (e.g., "host", "my-network")
+  RALPHEX_CLI_UPDATE     Update claude/codex at start ("1", "true", "yes"), off by default
   RALPHEX_EXTRA_ENV      Comma-separated env vars (VAR=value or VAR to inherit)
   RALPHEX_EXTRA_VOLUMES  Comma-separated volume mounts (src:dst[:opts])
 
@@ -115,6 +116,7 @@ def build_parser() -> argparse.ArgumentParser:
               RALPHEX_PORT           Web dashboard port with --serve (default: 8080)
               RALPHEX_DOCKER_SOCKET  Enable Docker socket mount ("1", "true", "yes")
               RALPHEX_DOCKER_NETWORK Docker network mode (e.g., "host", "my-network")
+              RALPHEX_CLI_UPDATE     Update claude/codex at start ("1", "true", "yes"), off by default
               RALPHEX_EXTRA_ENV      Comma-separated env vars (VAR=value or VAR)
               RALPHEX_EXTRA_VOLUMES  Comma-separated volume mounts (src:dst[:opts])
 
@@ -367,6 +369,18 @@ def build_volumes(creds_temp: Optional[Path], claude_home: Optional[Path] = None
         suffix = ":" + ",".join(opts) if opts else ""
         vols.extend(["-v", f"{src}:{dst}{suffix}"])
 
+    def add_bind_file(src: Path, dst: str) -> None:
+        """add rw bind-mount for a single file via --mount type=bind.
+        docker fails at container start if the source disappears after the is_file() check,
+        instead of silently creating a directory at dst and corrupting the credential path.
+        no selinux option here: docker's --mount has no relabel option (podman's relabel= has
+        no docker equivalent, and z/Z are -v only). the caller mounts the parent dir with :z,
+        and docker's z relabel walks the source tree, so this file's inode is already labeled.
+        source is CSV-quoted because --mount parses as CSV: a comma in the path (via $HOME or
+        CLAUDE_CONFIG_DIR) would otherwise split the field and docker would reject the spec.
+        dst is a fixed literal at both call sites, so it needs no quoting."""
+        vols.extend(["--mount", f'type=bind,"source={src}",target={dst}'])
+
     def add_symlink_targets(src: Path) -> None:
         """add read-only mounts for symlink targets that live under $HOME."""
         for target in symlink_target_dirs(src):
@@ -375,6 +389,14 @@ def build_volumes(creds_temp: Optional[Path], claude_home: Optional[Path] = None
 
     # 1. claude_home (resolved) -> /mnt/claude:ro
     add(resolve_path(claude_home), "/mnt/claude", ro=True)
+    # rw bind-mount for .credentials.json so token refreshes persist back to host;
+    # only when the file already exists as a regular file (is_file() guard).
+    # uses --mount type=bind so docker fails fast if the file disappears before container start,
+    # instead of silently creating a directory at the target and corrupting credential loading.
+    # macOS keychain path (creds_temp) is handled separately below; no write-back there.
+    claude_creds = claude_home / ".credentials.json"
+    if claude_creds.is_file():
+        add_bind_file(resolve_path(claude_creds), "/home/app/.claude/.credentials.json")
 
     # 2. cwd -> /workspace
     add(cwd, "/workspace")
@@ -396,6 +418,15 @@ def build_volumes(creds_temp: Optional[Path], claude_home: Optional[Path] = None
     if codex_dir.is_dir():
         add(resolve_path(codex_dir), "/mnt/codex", ro=True)
         add_symlink_targets(codex_dir)
+        # rw bind-mount for auth.json so token refreshes persist back to host;
+        # only when the file exists as a regular file (is_file() guard).
+        # uses --mount type=bind so docker fails fast if the file disappears before container start.
+        codex_auth = codex_dir / "auth.json"
+        if codex_auth.is_file():
+            add_bind_file(resolve_path(codex_auth), "/home/app/.codex/auth.json")
+        # note: concurrent container runs share these host credential files with no
+        # coordination. if two containers refresh OAuth tokens simultaneously, one may
+        # receive a stale (already-consumed) token. run one container at a time to avoid this.
 
     # 7. ~/.config/ralphex -> /home/app/.config/ralphex + symlink targets
     # always mount, creating the host dir if missing — this ensures docker
@@ -856,8 +887,12 @@ def handle_update_script(script_path: Path) -> int:
         answer = sys.stdin.readline()  # returns "" on EOF, treated as "no"
 
         if answer.strip().lower() == "y":
+            # capture the current mode before copy2 overwrites it with the
+            # tmpfile's restrictive 0600, otherwise the result is 0711 (rwx--x--x)
+            # and the interpreter can't read the script for any non-owner user
+            original_mode = script_path.stat().st_mode
             shutil.copy2(tmp_path, str(script_path))
-            script_path.chmod(script_path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+            script_path.chmod(original_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
             print("wrapper updated", file=sys.stderr)
         else:
             print("wrapper update skipped", file=sys.stderr)
@@ -895,7 +930,7 @@ def build_base_env_vars() -> list[str]:
     tz = detect_timezone()
     # TIME_ZONE configures baseimage's /etc/localtime; TZ is what Go's time
     # package reads for time.Local, so both must be set for consistent timestamps.
-    return [
+    result = [
         "-e", f"APP_UID={os.getuid()}",
         "-e", f"TIME_ZONE={tz}",
         "-e", f"TZ={tz}",
@@ -903,6 +938,12 @@ def build_base_env_vars() -> list[str]:
         "-e", "INIT_QUIET=1",
         "-e", "CLAUDE_CONFIG_DIR=/home/app/.claude",
     ]
+    # forward the opt-in so init.sh refreshes the CLIs; unset leaves the image's own default
+    # (off for the base image, baked on for ralphex-go) in charge
+    cli_update = os.environ.get("RALPHEX_CLI_UPDATE", "")
+    if cli_update:
+        result.extend(["-e", f"RALPHEX_CLI_UPDATE={cli_update}"])
+    return result
 
 
 def build_docker_command(
@@ -1057,6 +1098,10 @@ def main() -> int:
             volumes = build_volumes(creds_temp, claude_home)
             cmd = ["docker", "run", "--rm"]
             cmd.extend(build_base_env_vars())
+            # rendering help resolves no models, and the image entrypoint runs init.sh regardless of
+            # the command. force the refresh off here (overriding a forwarded opt-in or the ralphex-go
+            # image's baked-in default) so help is not preceded by a two-package npm install
+            cmd.extend(["-e", "RALPHEX_CLI_UPDATE=0"])
             cmd.extend(volumes)
             cmd.extend(["-w", "/workspace"])
             cmd.extend([image, "/srv/ralphex", "--help"])

@@ -286,7 +286,7 @@ When `executor = codex` is set in config and the user has also set `external_rev
 
 **Requirements:** `--codex` requires the codex CLI version 0.130.0 or newer. The mode relies on `[features] multi_agent`, `[agents.<name>]` agent registration, and (with `--pass-claude-md`) `project_doc_fallback_filenames`, all supported in 0.130.0. Older codex versions silently ignore unknown `-c` overrides, so a misconfigured run will not error visibly. It will simply behave as if the overrides were absent. There is no runtime version check; verify your codex version with `codex --version` if behavior is unexpected.
 
-**Model selection under `--codex`:** under `--codex` the `--plan-model` / `--task-model` / `--review-model` flags (and their config equivalents `plan_model` / `task_model` / `review_model`) select the model and effort per phase. `--plan-model` sets plan creation and falls back to `--task-model` when unset. `--task-model` sets the task phase. `--review-model` sets the review phase and falls back to `--task-model` when unset. Codex builds a separate review executor when the resolved review model/effort differs from task, so tasks and reviews can run on different codex models. Each `model[:effort]` spec is resolved against `codex_model` / `codex_reasoning_effort` (default `gpt-5.5` / `xhigh`): an unset spec inherits those defaults, and each populated half overrides its default (`--task-model=:high` changes effort only). The `max` effort level is claude-only. A spec requesting it under `--codex` is warned about and ignored. So codex model selection is: `--plan-model` / `--task-model` / `--review-model` (CLI or config), then `codex_model` / `codex_reasoning_effort` in ralphex config, applied as `-c` overrides to the codex CLI; set either codex value to empty (e.g. `codex_model =`) in your user config to inherit that field from `~/.codex/config.toml` instead. Commenting the line out keeps the embedded default. The startup banner under `--codex` shows the resolved plan/task model/effort for the current mode, plus a separate `review model` / `review reasoning effort` line when the review phase resolves differently.
+**Model selection under `--codex`:** under `--codex` the `--plan-model` / `--task-model` / `--review-model` flags (and their config equivalents `plan_model` / `task_model` / `review_model`) select the model and effort per phase. `--plan-model` sets plan creation and falls back to `--task-model` when unset. `--task-model` sets the task phase. `--review-model` sets the review phase and falls back to `--task-model` when unset. Codex builds a separate review executor when the resolved review model/effort differs from task, so tasks and reviews can run on different codex models. Each `model[:effort]` spec is resolved against `codex_model` / `codex_reasoning_effort` (default `gpt-5.6-sol` / `high`): an unset spec inherits those defaults, and each populated half overrides its default (`--task-model=:low` changes effort only). The `max` effort level is claude-only. A spec requesting it under `--codex` is warned about and ignored. So codex model selection is: `--plan-model` / `--task-model` / `--review-model` (CLI or config), then `codex_model` / `codex_reasoning_effort` in ralphex config, applied as `-c` overrides to the codex CLI; set either codex value to empty (e.g. `codex_model =`) in your user config to inherit that field from `~/.codex/config.toml` instead. Commenting the line out keeps the embedded default. The startup banner under `--codex` shows the resolved plan/task model/effort for the current mode, plus a separate `review model` / `review reasoning effort` line when the review phase resolves differently.
 
 ### Worktree Isolation
 
@@ -390,10 +390,11 @@ Then use `ralphex` as usual - it runs in a container with Claude Code and Codex 
 **Container CAN access (read-write):**
 - Project directory mounted at `/workspace` - full access to create, modify, delete files
 - Git operations within the project (branch, commit, etc.)
+- `~/.claude/.credentials.json` and `~/.codex/auth.json` - bind-mounted individually into the container's home so OAuth token refreshes persist back to the host instead of being lost when the container exits
 
 **Container CAN access (read-only):**
-- `~/.claude/` - credentials and settings (copied at startup, not modified)
-- `~/.codex/` - codex credentials if present
+- `~/.claude/` - settings, commands, skills, and agents (copied into the container at startup)
+- `~/.codex/` - codex config if present
 - `~/.config/ralphex/` - user-level ralphex configuration
 - `~/.gitconfig` - git identity for commits
 - Global gitignore (`core.excludesFile`) - auto-detected and mounted
@@ -413,7 +414,8 @@ Then use `ralphex` as usual - it runs in a container with Claude Code and Codex 
 </details>
 
 **Volume mounts:**
-- **Read-only**: `~/.claude` and `~/.codex` mounted to `/mnt/`, copied at startup to preserve isolation
+- **Read-only**: `~/.claude` and `~/.codex` mounted to `/mnt/`, copied at startup to preserve isolation (the two credential files below are bind-mounted separately instead of copied)
+- **Read-write (single-file)**: `~/.claude/.credentials.json` and `~/.codex/auth.json` bind-mounted to the matching paths under the container's home, so refreshed OAuth tokens are written back to the host
 - **Read-write**: project directory (`/workspace`) - where ralphex creates branches, edits code, and commits
 - **Extra mounts**: user-defined volumes via `-v`/`--volume` flags or `RALPHEX_EXTRA_VOLUMES` env var
 
@@ -433,8 +435,28 @@ Then use `ralphex` as usual - it runs in a container with Claude Code and Codex 
 - `RALPHEX_EXTRA_ENV` - Extra environment variables, comma-separated (e.g., `DEBUG=1,API_KEY`). Format: `VAR=value` or `VAR` (inherit from host). Security warning emitted for sensitive names (KEY, SECRET, TOKEN, etc.) with explicit values - use name-only form for secure credential passing
 - `RALPHEX_DOCKER_SOCKET` - Enable Docker socket mount: `1`, `true`, or `yes` (Docker wrapper only). CLI flag: `--docker`
 - `RALPHEX_DOCKER_NETWORK` - Docker network mode (e.g., `host`, `my-network`). Useful for reaching docker-compose services. CLI flag: `--network`
+- `RALPHEX_CLI_UPDATE` - Refresh claude/codex to their current npm releases at container start: `1`, `true`, or `yes` (Docker images only). Off by default in the base image; baked on in `ralphex-go`
 - `TZ` - Override container timezone (default: auto-detected from host via `/etc/localtime`). Example: `TZ=Europe/Berlin ralphex docs/plans/feature.md`
 - `RALPHEX_CLAUDE_PROVIDER` - Claude provider mode: `default` or `bedrock` (Docker wrapper only)
+
+**CLI freshness in the container:**
+
+The image installs claude and codex unpinned, so a published tag freezes them at whatever npm served on that build. Both ship far more often than ralphex is tagged, and a stale claude fails silently rather than loudly: a short model alias like `sonnet` resolves to whatever that build knew about, so `--task-model=sonnet` can quietly run an older model. Claude's own updater cannot help here, since npm installs it root-owned and the container runs as the `app` user.
+
+Setting `RALPHEX_CLI_UPDATE=1` refreshes both CLIs to their current npm releases on start, before dropping privileges. It usually adds about 5 seconds and is capped by a 90 second deadline. Best effort: if npm fails or the deadline is hit, the versions baked into the image are used and the run continues. If the install succeeds but a CLI does not run, the container says so rather than failing later without explanation.
+
+The base `ralphex` image leaves this **off** so anyone building on it gets no surprise npm install, network call, or version drift at container start. The `ralphex-go` image (the wrapper's default) bakes it **on**, so the common path stays current. Enable it yourself for a single run:
+
+```bash
+RALPHEX_CLI_UPDATE=1 ralphex docs/plans/feature.md
+```
+
+Or bake it into a custom image so every run refreshes:
+
+```dockerfile
+FROM ghcr.io/umputun/ralphex:latest
+ENV RALPHEX_CLI_UPDATE=1
+```
 
 **Docker socket support:**
 
@@ -589,6 +611,8 @@ ENV CARGO_HOME=/home/app/.cargo PATH="${PATH}:${CARGO_HOME}/bin"
 RUN apk add --no-cache openjdk21-jdk
 ENV JAVA_HOME=/usr/lib/jvm/java-21-openjdk PATH="${PATH}:${JAVA_HOME}/bin"
 ```
+
+Add `ENV RALPHEX_CLI_UPDATE=1` to your image if you want it to refresh claude/codex to the latest npm release on every container start, the way `ralphex-go` does. The base image leaves it off.
 
 Build and use:
 ```bash
@@ -944,8 +968,8 @@ Provider-related CLI flags (`--claude-command`, `--claude-args`, `--external-rev
 | `review_model` | Model for review phases as `model[:effort]`. Falls back to `task_model` if empty. Same syntax and wrapper behavior as `task_model`. Under `--codex`, selects the codex review-phase model/effort | empty |
 | `codex_enabled` | Enable codex review phase | `true` |
 | `codex_command` | Codex CLI command | `codex` |
-| `codex_model` | Codex model ID. Set to an empty value (`codex_model =`) in user config to inherit from `~/.codex/config.toml` instead | `gpt-5.5` |
-| `codex_reasoning_effort` | Reasoning effort level. Set to an empty value (`codex_reasoning_effort =`) in user config to inherit from `~/.codex/config.toml` instead | `xhigh` |
+| `codex_model` | Codex model ID. Set to an empty value (`codex_model =`) in user config to inherit from `~/.codex/config.toml` instead | `gpt-5.6-sol` |
+| `codex_reasoning_effort` | Reasoning effort level. Set to an empty value (`codex_reasoning_effort =`) in user config to inherit from `~/.codex/config.toml` instead | `high` |
 | `codex_timeout_ms` | Codex timeout in ms | `3600000` |
 | `codex_sandbox` | Sandbox mode. External codex review defaults to `read-only`; first-class `executor = codex` uses `danger-full-access` (task/review/finalize need to write git metadata and commit) unless explicitly overridden | `read-only` (claude mode) / `danger-full-access` (codex mode) |
 | `external_review_tool` | External review tool (`codex`, `custom`, `none`) | `codex` |
@@ -971,9 +995,9 @@ Provider-related CLI flags (`--claude-command`, `--claude-args`, `--external-rev
 | `color_signal` | Completion/failure signals color (hex) | `#ff6464` |
 | `color_timestamp` | Timestamp prefix color (hex) | `#8a8a8a` |
 | `color_info` | Informational messages color (hex) | `#b4b4b4` |
-| `claude_error_patterns` | Patterns to detect in claude output (comma-separated) | `You've hit your limit,You've hit your session limit,API Error:,cannot be launched inside another Claude Code session,Not logged in,Your usage allocation has been disabled by your admin,You've hit your org's monthly usage limit` |
+| `claude_error_patterns` | Patterns to detect in claude output (comma-separated) | `You've hit your limit,You've hit your session limit,API Error: 400,API Error: 401,API Error: 403,API Error: 404,API Error: 413,API Error: 429,API Error: 500,cannot be launched inside another Claude Code session,Not logged in,Your usage allocation has been disabled by your admin,You've hit your org's monthly usage limit,You've hit your individual spend limit` |
 | `codex_error_patterns` | Patterns to detect in codex output (comma-separated) | `Rate limit exceeded,rate limit reached,429 Too Many Requests,quota exceeded,insufficient_quota,You've hit your usage limit` |
-| `claude_limit_patterns` | Limit patterns for claude triggering wait+retry (comma-separated) | `You've hit your limit,You've hit your session limit,Your usage allocation has been disabled by your admin,You've hit your org's monthly usage limit` |
+| `claude_limit_patterns` | Limit patterns for claude triggering wait+retry (comma-separated) | `You've hit your limit,You've hit your session limit,Your usage allocation has been disabled by your admin,You've hit your org's monthly usage limit,You've hit your individual spend limit` |
 | `codex_limit_patterns` | Limit patterns for codex triggering wait+retry (comma-separated) | `Rate limit exceeded,rate limit reached,429 Too Many Requests,quota exceeded,insufficient_quota,You've hit your usage limit` |
 | `claude_retry_patterns` | Transient claude/fya markers retried like executor timeouts (comma-separated) | `FYA_TRANSIENT_TIMEOUT,API Error: 529,API Error: 502,API Error: 503,API Error: 504` |
 | `wait_on_limit` | Wait duration before retrying on rate limit (e.g., `1h`, `30m`) | disabled |
@@ -984,7 +1008,7 @@ Colors use 24-bit RGB (true color), supported natively by all modern terminals (
 
 Error patterns use case-insensitive substring matching. When a pattern is detected in claude or codex output, ralphex exits gracefully with an informative message suggesting how to check usage/status. Multiple patterns are separated by commas, with whitespace trimmed from each pattern.
 
-**Transient retry:** Claude retry patterns (`claude_retry_patterns`) are checked before limit and error patterns. They cover wrapper-level stalls such as fya's `FYA_TRANSIENT_TIMEOUT` and transient server-side HTTP errors (`API Error: 529` Overloaded and the `502`/`503`/`504` gateway errors); matches are retried through the existing timeout-style phase path and do not use `wait_on_limit`, so they recover automatically without `--wait`. The task and review retry loops wait a short fixed backoff (5s) before re-running the failed iteration. `API Error: 500` is intentionally excluded — it can be a deterministic server failure and is caught by the broad `API Error:` error pattern instead.
+**Transient retry:** Claude retry patterns (`claude_retry_patterns`) are checked before limit and error patterns. They cover wrapper-level stalls such as fya's `FYA_TRANSIENT_TIMEOUT` and transient server-side HTTP errors (`API Error: 529` Overloaded and the `502`/`503`/`504` gateway errors); matches are retried through the existing timeout-style phase path and do not use `wait_on_limit`, so they recover automatically without `--wait`. The task and review retry loops wait a short fixed backoff (5s) before re-running the failed iteration. `API Error: 500` is intentionally excluded — it can be a deterministic server failure and is caught by the enumerated `API Error: 500` error pattern instead.
 
 **Rate limit retry:** Limit patterns (`claude_limit_patterns`, `codex_limit_patterns`) work similarly but support optional wait+retry behavior. When `--wait` is set (or `wait_on_limit` in config), a limit pattern match triggers a wait followed by automatic retry instead of exiting. Without `--wait`, limit patterns fall through to error pattern behavior. Limit patterns are checked before error patterns — if the same string matches both, the limit pattern takes priority when wait is enabled.
 

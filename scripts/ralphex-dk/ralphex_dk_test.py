@@ -6,6 +6,7 @@ import io
 import os
 import platform
 import shutil
+import stat
 import sys
 import tempfile
 import threading
@@ -43,6 +44,7 @@ from ralphex_dk import (  # noqa: E402
     get_claude_provider,
     get_docker_socket_gid,
     get_global_gitignore,
+    handle_update_script,
     is_docker_enabled,
     is_sensitive_name,
     keychain_service_name,
@@ -214,12 +216,18 @@ class _FakeHomeTestCase(unittest.TestCase):
 
 class TestBuildVolumes(_FakeHomeTestCase):
     def test_volume_pairs(self) -> None:
+        creds = self.fake_home / ".claude" / ".credentials.json"
+        creds.write_text('{"token": "x"}')
         with unittest.mock.patch("ralphex_dk.selinux_enabled", return_value=False):
             vols = build_volumes(None)
-        # volumes should come in -v pairs
+        # volumes come in flag/spec pairs: -v src:dst[:opts] or --mount type=bind,...
         for i in range(0, len(vols), 2):
-            self.assertEqual(vols[i], "-v")
-            self.assertIn(":", vols[i + 1])
+            flag, spec = vols[i], vols[i + 1]
+            self.assertIn(flag, ("-v", "--mount"))
+            if flag == "-v":
+                self.assertIn(":", spec)
+            else:
+                self.assertTrue(spec.startswith("type=bind,"), f"unexpected --mount spec: {spec}")
 
     def test_includes_workspace_without_selinux(self) -> None:
         with unittest.mock.patch("ralphex_dk.selinux_enabled", return_value=False):
@@ -356,6 +364,46 @@ class TestDetectTimezone(unittest.TestCase):
             else:
                 os.environ["TZ"] = old
 
+    def test_cli_update_forwarded_when_set(self) -> None:
+        """RALPHEX_CLI_UPDATE reaches the container so init.sh runs the cli refresh."""
+        old = os.environ.get("RALPHEX_CLI_UPDATE")
+        try:
+            os.environ["RALPHEX_CLI_UPDATE"] = "1"
+            self.assertIn("RALPHEX_CLI_UPDATE=1", build_base_env_vars())
+        finally:
+            if old is None:
+                os.environ.pop("RALPHEX_CLI_UPDATE", None)
+            else:
+                os.environ["RALPHEX_CLI_UPDATE"] = old
+
+    def test_help_forces_cli_update_off(self) -> None:
+        """--help renders help only, but the image entrypoint runs init.sh whatever the command is,
+        so the help path forces the refresh off instead of paying for an npm install it cannot use."""
+        src = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ralphex-dk.sh")
+        with open(src) as f:
+            body = f.read()
+        marker = '[image, "/srv/ralphex", "--help"]'
+        self.assertIn(marker, body)
+        # the docker run that builds the help command must force the refresh off
+        help_block = body[:body.index(marker)]
+        help_block = help_block[help_block.rindex('["docker", "run", "--rm"]'):]
+        self.assertIn('"RALPHEX_CLI_UPDATE=0"', help_block)
+
+    def test_cli_update_absent_by_default(self) -> None:
+        """update is opt-in: nothing is forwarded when the flag is unset or empty, leaving the
+        image's own default in charge."""
+        old = os.environ.get("RALPHEX_CLI_UPDATE")
+        try:
+            os.environ.pop("RALPHEX_CLI_UPDATE", None)
+            self.assertFalse([e for e in build_base_env_vars() if e.startswith("RALPHEX_CLI_UPDATE=")])
+            os.environ["RALPHEX_CLI_UPDATE"] = ""
+            self.assertFalse([e for e in build_base_env_vars() if e.startswith("RALPHEX_CLI_UPDATE=")])
+        finally:
+            if old is None:
+                os.environ.pop("RALPHEX_CLI_UPDATE", None)
+            else:
+                os.environ["RALPHEX_CLI_UPDATE"] = old
+
 class TestExtractCredentials(unittest.TestCase):
     def test_write_pattern_adds_trailing_newline(self) -> None:
         """credential write pattern appends newline (matching bash echo behavior)."""
@@ -453,6 +501,93 @@ class TestBuildDockerCmd(_FakeHomeTestCase):
             self.assertIn(mount, vols)
         finally:
             os.unlink(tmp_path)
+
+class TestOAuthTokenPersistence(_FakeHomeTestCase):
+    def test_codex_auth_json_rw_mount_when_file_exists(self) -> None:
+        """build_volumes adds rw --mount bind for ~/.codex/auth.json when it is a regular file."""
+        codex_dir = self.fake_home / ".codex"
+        codex_dir.mkdir()
+        auth_file = codex_dir / "auth.json"
+        auth_file.write_text('{"token": "x"}')
+        with unittest.mock.patch("ralphex_dk.selinux_enabled", return_value=False):
+            vols = build_volumes(None)
+        expected = f'type=bind,"source={auth_file.resolve()}",target=/home/app/.codex/auth.json'
+        self.assertIn(expected, vols)
+        self.assertEqual(vols[vols.index(expected) - 1], "--mount")
+
+    def test_codex_auth_json_no_mount_when_absent(self) -> None:
+        """build_volumes does not add auth.json mount when ~/.codex/auth.json is missing."""
+        codex_dir = self.fake_home / ".codex"
+        codex_dir.mkdir()
+        with unittest.mock.patch("ralphex_dk.selinux_enabled", return_value=False):
+            vols = build_volumes(None)
+        self.assertNotIn("/home/app/.codex/auth.json", " ".join(vols))
+
+    def test_codex_auth_json_no_mount_when_directory(self) -> None:
+        """build_volumes does not add auth.json mount when the path is a directory (not a file)."""
+        codex_dir = self.fake_home / ".codex"
+        codex_dir.mkdir()
+        (codex_dir / "auth.json").mkdir()  # directory, not file
+        with unittest.mock.patch("ralphex_dk.selinux_enabled", return_value=False):
+            vols = build_volumes(None)
+        self.assertNotIn("/home/app/.codex/auth.json", " ".join(vols))
+
+    def test_claude_credentials_rw_mount_when_file_exists(self) -> None:
+        """build_volumes adds rw --mount bind for ~/.claude/.credentials.json when it is a regular file."""
+        claude_dir = self.fake_home / ".claude"
+        creds_file = claude_dir / ".credentials.json"
+        creds_file.write_text('{"token": "y"}')
+        with unittest.mock.patch("ralphex_dk.selinux_enabled", return_value=False):
+            vols = build_volumes(None)
+        expected = f'type=bind,"source={creds_file.resolve()}",target=/home/app/.claude/.credentials.json'
+        self.assertIn(expected, vols)
+        self.assertEqual(vols[vols.index(expected) - 1], "--mount")
+
+    def test_claude_credentials_no_mount_when_absent(self) -> None:
+        """build_volumes does not add .credentials.json rw mount when the file does not exist."""
+        with unittest.mock.patch("ralphex_dk.selinux_enabled", return_value=False):
+            vols = build_volumes(None)
+        self.assertNotIn("/home/app/.claude/.credentials.json", " ".join(vols))
+
+    def test_claude_credentials_no_mount_when_directory(self) -> None:
+        """build_volumes does not add .credentials.json mount when the path is a directory (not a file)."""
+        claude_dir = self.fake_home / ".claude"
+        (claude_dir / ".credentials.json").mkdir()  # directory, not file
+        with unittest.mock.patch("ralphex_dk.selinux_enabled", return_value=False):
+            vols = build_volumes(None)
+        self.assertNotIn("/home/app/.claude/.credentials.json", " ".join(vols))
+
+    def test_bind_source_with_comma_is_csv_quoted(self) -> None:
+        """--mount parses as CSV, so a comma in the source path must stay inside quotes or docker
+        rejects the spec and the container never starts."""
+        claude_home = self.fake_home / "a,b" / ".claude"
+        claude_home.mkdir(parents=True)
+        creds_file = claude_home / ".credentials.json"
+        creds_file.write_text('{"token": "z"}')
+        with unittest.mock.patch("ralphex_dk.selinux_enabled", return_value=False):
+            vols = build_volumes(None, claude_home=claude_home)
+        expected = f'type=bind,"source={creds_file.resolve()}",target=/home/app/.claude/.credentials.json'
+        self.assertIn(expected, vols)
+
+    def test_bind_specs_carry_no_selinux_option_when_selinux(self) -> None:
+        """--mount bind specs stay label-free under SELinux: docker's --mount has no relabel option
+        and rejects the whole spec, so any label would break container start on SELinux hosts."""
+        claude_dir = self.fake_home / ".claude"
+        (claude_dir / ".credentials.json").write_text('{"token": "y"}')
+        codex_dir = self.fake_home / ".codex"
+        codex_dir.mkdir()
+        (codex_dir / "auth.json").write_text('{"token": "x"}')
+        with unittest.mock.patch("ralphex_dk.selinux_enabled", return_value=True):
+            vols = build_volumes(None)
+        binds = [v for v in vols if v.startswith("type=bind,")]
+        self.assertEqual(len(binds), 2, f"expected both credential binds, got {binds}")
+        for spec in binds:
+            for opt in ("label=", "relabel=", "selinux=", ",z"):
+                self.assertNotIn(opt, spec, f"docker --mount rejects {opt!r}: {spec}")
+        # the label-free binds are only safe because the parent dirs are :z-relabeled recursively
+        self.assertIn(f"{claude_dir.resolve()}:/mnt/claude:ro,z", vols)
+        self.assertIn(f"{codex_dir.resolve()}:/mnt/codex:ro,z", vols)
+
 
 class TestKeychainServiceName(unittest.TestCase):
     def test_default_claude_dir(self) -> None:
@@ -564,10 +699,12 @@ class TestSelinuxEnabled(unittest.TestCase):
 
 class TestSelinuxVolumeSuffix(_FakeHomeTestCase):
     def test_z_label_in_volumes_when_selinux(self) -> None:
-        """volume mounts include :z label when SELinux is enabled."""
+        """-v volume mounts include :z label when SELinux is enabled."""
         with unittest.mock.patch("ralphex_dk.selinux_enabled", return_value=True):
             vols = build_volumes(None)
         for i in range(1, len(vols), 2):
+            if vols[i].startswith("type=bind,"):
+                continue  # --mount specs carry no selinux label, parent dir's :z relabels them
             has_z = vols[i].endswith(":z") or ",z" in vols[i]
             self.assertTrue(has_z, f"volume {vols[i]} missing :z SELinux label")
 
@@ -1031,6 +1168,38 @@ class TestMainArgparse(EnvTestCase):
             result = main()
         self.assertEqual(len(calls), 1)
         self.assertEqual(result, 0)
+
+    def test_update_script_preserves_readable_mode(self) -> None:
+        """updated wrapper keeps its 0755 mode, not 0711 unreadable by non-owner (issue #397)."""
+        tmp = Path(tempfile.mkdtemp())
+        try:
+            script_path = tmp / "ralphex"
+            script_path.write_text("#!/usr/bin/env python3\n# old\n")
+            script_path.chmod(0o755)
+            new_content = b"#!/usr/bin/env python3\n# new\n"
+
+            class _Resp:
+                def __enter__(self_inner):
+                    return self_inner
+
+                def __exit__(self_inner, *_a):
+                    return False
+
+                def read(self_inner):
+                    return new_content
+
+            with unittest.mock.patch("ralphex_dk.urlopen", return_value=_Resp()), \
+                    unittest.mock.patch("sys.stdin", io.StringIO("y\n")), \
+                    unittest.mock.patch("sys.stderr", io.StringIO()):
+                rc = handle_update_script(script_path)
+
+            self.assertEqual(rc, 0)
+            mode = script_path.stat().st_mode & 0o777
+            self.assertTrue(mode & stat.S_IROTH, f"world-read bit lost, mode={oct(mode)}")
+            self.assertEqual(mode, 0o755, f"expected 0755 preserved, got {oct(mode)}")
+            self.assertEqual(script_path.read_text(), new_content.decode())
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
 
     def test_env_flags_build_cli_env(self) -> None:
         """CLI -E/--env flags are converted to docker -e flags."""
@@ -3108,7 +3277,8 @@ def run_tests() -> None:
                TestBedrockSkipKeychain, TestBedrockValidation, TestParseEnvFlags, TestExtractEnvFromFlags,
                TestBuildDockerCommand, TestDetectInheritedEnvVars, TestDetectExplicitSecrets, TestDryRun,
                TestDockerSocketGid, TestDockerSocketMount, TestBuildDockerCommandDockerGid,
-               TestDockerLinuxWarning, TestDryRunDocker, TestDockerNetwork]:
+               TestDockerLinuxWarning, TestDryRunDocker, TestDockerNetwork,
+               TestOAuthTokenPersistence]:
         suite.addTests(loader.loadTestsFromTestCase(tc))
     runner = unittest.TextTestRunner(verbosity=2)
     result = runner.run(suite)
