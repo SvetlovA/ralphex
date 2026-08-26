@@ -1664,7 +1664,7 @@ func TestClaudeExecutor_Run_EffortFlag(t *testing.T) {
 // a plain "echo" cannot be used: on Windows it is a cmd.exe builtin rather than
 // an executable on PATH. the extension is platform-specific so the script runs
 // through the same path production uses - a .cmd batch file wrapped by
-// command.Command on Windows, an executable shell script elsewhere.
+// execx.Command on Windows, an executable shell script elsewhere.
 func echoScript(t *testing.T, msg string) string {
 	t.Helper()
 

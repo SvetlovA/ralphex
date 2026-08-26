@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/umputun/ralphex/pkg/command"
+	"github.com/umputun/ralphex/pkg/execx"
 	"github.com/umputun/ralphex/pkg/status"
 )
 
@@ -88,9 +88,9 @@ func (r *execClaudeRunner) Run(ctx context.Context, name string, args ...string)
 		return nil, nil, fmt.Errorf("context already canceled: %w", err)
 	}
 
-	// use command.Command (not command.CommandContext) because we handle cancellation ourselves
+	// use execx.Command (not execx.CommandContext) because we handle cancellation ourselves
 	// to ensure the entire process group is killed, not just the direct child
-	cmd := command.Command(name, args...)
+	cmd := execx.Command(name, args...)
 
 	// build child env: always strip CLAUDECODE (prevents nested session errors); strip
 	// ANTHROPIC_API_KEY by default so a host-set key cannot silently override OAuth/keychain

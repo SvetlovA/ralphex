@@ -1,5 +1,6 @@
-// Package command creates exec.Cmd instances with platform-specific adaptations.
-package command
+// Package execx creates exec.Cmd instances with platform-specific adaptations,
+// mirroring the os/exec constructors it wraps.
+package execx
 
 import (
 	"context"

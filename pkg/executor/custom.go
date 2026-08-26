@@ -7,7 +7,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/umputun/ralphex/pkg/command"
+	"github.com/umputun/ralphex/pkg/execx"
 )
 
 // CustomRunner abstracts command execution for custom review scripts.
@@ -25,9 +25,9 @@ func (r *execCustomRunner) Run(ctx context.Context, script, promptFile string) (
 		return nil, nil, fmt.Errorf("context already canceled: %w", err)
 	}
 
-	// use command.Command (not command.CommandContext) because we handle cancellation ourselves
+	// use execx.Command (not execx.CommandContext) because we handle cancellation ourselves
 	// to ensure the entire process group is killed, not just the direct child
-	cmd := command.Command(script, promptFile)
+	cmd := execx.Command(script, promptFile)
 
 	// create new process group so we can kill all descendants on cleanup
 	setupProcessGroup(cmd)
