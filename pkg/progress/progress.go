@@ -222,18 +222,14 @@ func NewLogger(cfg Config, colors *Colors, holder *status.PhaseHolder) (*Logger,
 	// if the file has a completion footer from a previous run, truncate and start fresh.
 	// this prevents mixing unrelated content when the same plan filename is reused.
 	// the file lock is held here, so path and fd refer to the same inode; path-based
-	// truncation is safe. os.Truncate (path-based) is used instead of f.Truncate
-	// (fd-based) because on Windows a fd opened with O_APPEND does not have the
-	// FILE_WRITE_DATA permission required for fd-based truncation ("access is denied").
+	// truncation is safe.
 	if restart && isProgressCompleted(f, fi.Size()) {
 		if tErr := os.Truncate(f.Name(), 0); tErr != nil {
 			cleanup()
 			return nil, fmt.Errorf("truncate completed progress file: %w", tErr)
 		}
 		if _, sErr := f.Seek(0, io.SeekStart); sErr != nil {
-			_ = unlockFile(f)
-			unregisterActiveLock(f.Name())
-			f.Close()
+			cleanup()
 			return nil, fmt.Errorf("seek after truncate: %w", sErr)
 		}
 		restart = false
@@ -242,9 +238,7 @@ func NewLogger(cfg Config, colors *Colors, holder *status.PhaseHolder) (*Logger,
 	// seek to end so writes append (needed because file was opened without O_APPEND)
 	if restart {
 		if _, sErr := f.Seek(0, io.SeekEnd); sErr != nil {
-			_ = unlockFile(f)
-			unregisterActiveLock(f.Name())
-			f.Close()
+			cleanup()
 			return nil, fmt.Errorf("seek to end: %w", sErr)
 		}
 	}

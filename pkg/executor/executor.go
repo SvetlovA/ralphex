@@ -88,9 +88,9 @@ func (r *execClaudeRunner) Run(ctx context.Context, name string, args ...string)
 		return nil, nil, fmt.Errorf("context already canceled: %w", err)
 	}
 
-	// use exec.Command (not CommandContext) because we handle cancellation ourselves
+	// use command.Command (not command.Context) because we handle cancellation ourselves
 	// to ensure the entire process group is killed, not just the direct child
-	cmd := command.Wrapper{}.Command(name, args...)
+	cmd := command.Command(name, args...)
 
 	// build child env: always strip CLAUDECODE (prevents nested session errors); strip
 	// ANTHROPIC_API_KEY by default so a host-set key cannot silently override OAuth/keychain

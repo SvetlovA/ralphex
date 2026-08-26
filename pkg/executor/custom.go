@@ -25,9 +25,9 @@ func (r *execCustomRunner) Run(ctx context.Context, script, promptFile string) (
 		return nil, nil, fmt.Errorf("context already canceled: %w", err)
 	}
 
-	// use exec.Command (not CommandContext) because we handle cancellation ourselves
+	// use command.Command (not command.Context) because we handle cancellation ourselves
 	// to ensure the entire process group is killed, not just the direct child
-	cmd := command.Wrapper{}.Command(script, promptFile)
+	cmd := command.Command(script, promptFile)
 
 	// create new process group so we can kill all descendants on cleanup
 	setupProcessGroup(cmd)

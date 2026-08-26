@@ -107,7 +107,7 @@ func (s *Selector) selectWithFzf(ctx context.Context) (string, error) {
 	}
 
 	// use fzf for selection
-	cmd := command.Wrapper{}.CommandContext(ctx, "fzf",
+	cmd := command.Context(ctx, "fzf",
 		"--prompt=select plan: ",
 		"--preview=head -50 {}",
 		"--preview-window=right:60%",

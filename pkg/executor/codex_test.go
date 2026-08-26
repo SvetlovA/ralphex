@@ -555,8 +555,8 @@ func TestExecCodexRunner_Run(t *testing.T) {
 	// test the real runner with a simple command
 	runner := &execCodexRunner{}
 
-	// use echo which writes to stdout
-	streams, wait, err := runner.Run(context.Background(), "echo", "hello")
+	// use a script that writes to stdout
+	streams, wait, err := runner.Run(context.Background(), echoScript(t, "hello"))
 
 	require.NoError(t, err)
 	require.NotNil(t, streams.Stdout)
