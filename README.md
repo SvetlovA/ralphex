@@ -294,6 +294,8 @@ The `--worktree` flag runs plan execution in an isolated git worktree at `.ralph
 
 **Supported modes:** `--worktree` only applies to full mode and `--tasks-only`. It is silently ignored for `--review`, `--external-only`, and `--plan` — these modes operate from the current directory.
 
+**Source checkout state:** Uncommitted files in the source checkout do not have to be stashed first. Ralphex lists them in a warning and does not copy them into the generated worktree. An uncommitted selected plan is copied so it can be committed on the feature branch. A new feature branch starts at the current `HEAD`; an existing feature branch keeps its own tip. Local `.ralphex` configuration is loaded before worktree creation and still applies to the run. Commit any repository changes the plan needs before starting. An unfinished Git operation remains a hard error because completion archives the plan in the source checkout. In-place branch mode also requires a clean checkout because it creates the feature branch in that same working tree.
+
 **Re-running reviews on a worktree branch:** if the task phase completed in a worktree but the review phase needs to be re-run, `cd` into the worktree directory and run the review from there:
 
 ```bash
@@ -1261,7 +1263,11 @@ Progress file (`.ralphex/progress/progress-*.txt`) is a real-time execution log�
 
 **Do I need to commit changes before running ralphex?**
 
-It depends. If the plan file is the only uncommitted change, ralphex auto-commits it after creating the feature branch and continues execution. If other files have uncommitted changes, ralphex shows a helpful error with options: stash temporarily (`git stash`), commit first (`git commit -am "wip"`), or use review-only mode (`ralphex --review`).
+It depends on the mode. If the plan file is the only uncommitted change, ralphex auto-commits it after creating the feature branch and continues execution.
+
+In the default in-place branch mode, other uncommitted files stop the run with a helpful error and options: stash temporarily (`git stash`), commit first (`git commit -am "wip"`), or use review-only mode (`ralphex --review`). The feature branch is created in that same working tree, so unrelated changes would be mixed into the plan's work.
+
+With `--worktree`, they do not stop the run — ralphex lists them in a warning and leaves them alone. The catch is the other way round: the worktree is built from committed content, so those edits are not in it. Commit anything the plan depends on before starting. See [Worktree Isolation](#worktree-isolation).
 
 **What's the difference between agents/ and prompts/?**
 
