@@ -26,7 +26,7 @@ func (c *customChannel) send(ctx context.Context, r Result) error {
 		return fmt.Errorf("marshal result: %w", err)
 	}
 
-	cmd := command.Context(ctx, c.scriptPath)
+	cmd := command.CommandContext(ctx, c.scriptPath)
 	cmd.Stdin = bytes.NewReader(data)
 
 	var stdout, stderr bytes.Buffer

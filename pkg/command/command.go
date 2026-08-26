@@ -22,9 +22,9 @@ func Command(name string, args ...string) *exec.Cmd {
 	return exec.Command(name, args...) //nolint:noctx // callers handle cancellation by killing the process group
 }
 
-// Context is Command with a ctx bound to the command's lifetime, mirroring
-// exec.CommandContext.
-func Context(ctx context.Context, name string, args ...string) *exec.Cmd {
+// CommandContext is Command with a ctx bound to the command's lifetime,
+// mirroring exec.CommandContext.
+func CommandContext(ctx context.Context, name string, args ...string) *exec.Cmd {
 	name, args = adapt(name, args)
 	return exec.CommandContext(ctx, name, args...)
 }

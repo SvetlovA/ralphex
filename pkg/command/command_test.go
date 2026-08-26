@@ -46,9 +46,9 @@ func TestIsBatchFile(t *testing.T) {
 	}
 }
 
-// commandCases covers the wrapping decision; Command and Context share it because
-// they must make identical choices.
-var commandCases = []struct { //nolint:gochecknoglobals // shared table for Command and Context
+// commandCases covers the wrapping decision; Command and CommandContext share it
+// because they must make identical choices.
+var commandCases = []struct { //nolint:gochecknoglobals // shared table for Command and CommandContext
 	name       string
 	goos       string
 	cmdName    string
@@ -155,11 +155,11 @@ func TestCommand(t *testing.T) {
 	}
 }
 
-func TestContext(t *testing.T) {
+func TestCommandContext(t *testing.T) {
 	for _, tc := range commandCases {
 		t.Run(tc.name, func(t *testing.T) {
 			setGOOS(t, tc.goos)
-			cmd := Context(t.Context(), tc.cmdName, tc.args...)
+			cmd := CommandContext(t.Context(), tc.cmdName, tc.args...)
 
 			assert.Equal(t, tc.expectCmd, cmd.Args[0], "command name")
 			assert.Equal(t, tc.expectArgs, cmd.Args[1:], "command arguments")

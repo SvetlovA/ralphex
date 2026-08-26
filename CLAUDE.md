@@ -223,7 +223,7 @@ Key files:
   - Process group signals not available (graceful shutdown kills direct process only, not child processes)
   - File locking implemented via `LockFileEx` on a sentinel byte at offset 2^63-1 (full-range locks would block the Tailer, since Windows file locks are mandatory)
   - Prompts are passed to the claude CLI via stdin (not `-p` flag) to avoid the cmd.exe 8191-character command-line limit
-  - `.cmd`/`.bat` wrapper: a command configured as an explicit batch path (e.g. `claude_command = C:\...\claude.cmd`) is invoked through `cmd /C` by `command.Command`/`command.Context` (`pkg/command`), which mirror `exec.Command`/`exec.CommandContext`. A bare name such as `claude` is left alone — `exec.LookPath` resolves it through `PATHEXT` and `os/exec` runs the resulting shim directly. An unresolvable name is also left alone, so `Start` reports `exec.ErrNotFound` rather than a cmd.exe exit code
+  - `.cmd`/`.bat` wrapper: a command configured as an explicit batch path (e.g. `claude_command = C:\...\claude.cmd`) is invoked through `cmd /C` by `command.Command`/`command.CommandContext` (`pkg/command`), which mirror `exec.Command`/`exec.CommandContext`. A bare name such as `claude` is left alone — `exec.LookPath` resolves it through `PATHEXT` and `os/exec` runs the resulting shim directly. An unresolvable name is also left alone, so `Start` reports `exec.ErrNotFound` rather than a cmd.exe exit code
 
 ### Cross-Platform Development
 
