@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -259,6 +260,15 @@ func NewLogger(cfg Config, colors *Colors, holder *status.PhaseHolder) (*Logger,
 			return nil, resetErr
 		}
 		restart, pruneWarn = !freshStart, warn
+	}
+
+	// the fd is opened without O_APPEND so the truncation above can succeed on Windows, so the
+	// offset is still at 0 here and every write would overwrite the preserved transcript. seek
+	// explicitly instead: on a restart this lands past the kept content, and on a fresh or
+	// just-truncated file it lands at 0.
+	if _, seekErr := f.Seek(0, io.SeekEnd); seekErr != nil {
+		cleanup()
+		return nil, fmt.Errorf("seek progress file: %w", seekErr)
 	}
 
 	l := &Logger{
@@ -816,6 +826,23 @@ func rollbackProgressArchive(archivePath string, cause error) error {
 // The archive basename carries no "progress-" prefix on purpose: the web dashboard discovers
 // sessions by walking for progress-*.txt (pkg/web/watcher.go isProgressFile) and skips neither
 // .ralphex nor history, so a prefixed archive would be listed and replayed as a session of its own.
+// sanitizeHistoryStem makes a history directory name usable on the running platform. Windows
+// strips trailing dots and spaces from every path component, so MkdirAll on "progress-.." creates
+// "progress-" while opening a file through "progress-.." fails with "cannot find the path" - the
+// archive would be unreachable and NewLogger, whose callers treat its error as fatal, would abort
+// the run. Trimming keeps the name inside the history directory, matching what Windows would have
+// created anyway. On other platforms the stem is left exactly as it is.
+func sanitizeHistoryStem(stem string) string {
+	if runtime.GOOS != "windows" {
+		return stem
+	}
+	trimmed := strings.TrimRight(stem, ". ")
+	if trimmed == "" {
+		return "progress"
+	}
+	return trimmed
+}
+
 func archiveCompletedProgress(f *os.File, size int64, completedAt time.Time) (archivePath string, err error) {
 	base := filepath.Base(f.Name())
 	stem := strings.TrimPrefix(strings.TrimSuffix(base, ".txt"), "progress-")
@@ -823,6 +850,7 @@ func archiveCompletedProgress(f *os.File, size int64, completedAt time.Time) (ar
 	if historyStem == "" || historyStem == "." || historyStem == ".." {
 		historyStem = "progress-" + historyStem
 	}
+	historyStem = sanitizeHistoryStem(historyStem)
 	historyDir := filepath.Join(filepath.Dir(f.Name()), "history", historyStem)
 	if mkErr := os.MkdirAll(historyDir, 0o750); mkErr != nil {
 		return "", fmt.Errorf("create history dir: %w", mkErr)

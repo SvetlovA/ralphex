@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -1258,6 +1259,31 @@ func TestNewLogger_CanonicalNameCollisionsShareHistoryBucket(t *testing.T) {
 	})
 }
 
+func TestSanitizeHistoryStem(t *testing.T) {
+	tests := []struct {
+		name       string
+		stem       string
+		want       string
+		wantOnUnix string
+	}{
+		{name: "ordinary stem untouched", stem: "feature-x", want: "feature-x", wantOnUnix: "feature-x"},
+		{name: "trailing dots trimmed on windows", stem: "progress-..", want: "progress-", wantOnUnix: "progress-.."},
+		{name: "trailing space trimmed on windows", stem: "plan ", want: "plan", wantOnUnix: "plan "},
+		{name: "all-dot stem falls back", stem: "...", want: "progress", wantOnUnix: "..."},
+		{name: "inner dots kept", stem: "v1.2.3-plan", want: "v1.2.3-plan", wantOnUnix: "v1.2.3-plan"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			want := tc.want
+			if runtime.GOOS != "windows" {
+				want = tc.wantOnUnix
+			}
+			assert.Equal(t, want, sanitizeHistoryStem(tc.stem))
+		})
+	}
+}
+
 func TestNewLogger_HistoryStemCannotEscapeHistoryDirectory(t *testing.T) {
 	tmpDir := t.TempDir()
 	origDir, _ := os.Getwd()
@@ -1270,7 +1296,12 @@ func TestNewLogger_HistoryStemCannotEscapeHistoryDirectory(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, l.Close())
 
-	archives, err := filepath.Glob(filepath.Join(tmpDir, progressDir, "history", "progress-..", "*.txt"))
+	// windows strips trailing dots from path components, so the stem is trimmed to stay reachable
+	stemDir := "progress-.."
+	if runtime.GOOS == "windows" {
+		stemDir = "progress-"
+	}
+	archives, err := filepath.Glob(filepath.Join(tmpDir, progressDir, "history", stemDir, "*.txt"))
 	require.NoError(t, err)
 	assert.Len(t, archives, 1)
 	escaped, err := filepath.Glob(filepath.Join(tmpDir, progressDir, "progress-..-*.txt"))

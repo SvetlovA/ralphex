@@ -2189,6 +2189,8 @@ func setupTestRepo(t *testing.T) string {
 	runGit(t, dir, "config", "user.email", "test@test.com")
 	runGit(t, dir, "config", "user.name", "test")
 	runGit(t, dir, "config", "commit.gpgsign", "false")
+	// pin line endings so a developer's global core.autocrlf cannot rewrite fixture content
+	runGit(t, dir, "config", "core.autocrlf", "false")
 
 	readme := filepath.Join(dir, "README.md")
 	err := os.WriteFile(readme, []byte("# Test\n"), 0o600)
@@ -2209,6 +2211,8 @@ func initEmptyRepo(t *testing.T) string {
 	runGit(t, dir, "config", "user.email", "test@test.com")
 	runGit(t, dir, "config", "user.name", "test")
 	runGit(t, dir, "config", "commit.gpgsign", "false")
+	// pin line endings so a developer's global core.autocrlf cannot rewrite fixture content
+	runGit(t, dir, "config", "core.autocrlf", "false")
 	return dir
 }
 
@@ -2820,9 +2824,23 @@ func TestWorktreePlanFile(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.want, worktreePlanFile(tc.planFile, tc.repoRoot, tc.wtPath))
+			got := worktreePlanFile(nativePath(tc.planFile), nativePath(tc.repoRoot), nativePath(tc.wtPath))
+			assert.Equal(t, nativePath(tc.want), got)
 		})
 	}
+}
+
+// nativePath rewrites a posix-style table path into the running platform's form. worktreePlanFile
+// works on filepath.IsAbs and filepath.Rel, and "/repo/..." is not absolute on windows, so the
+// cases have to carry a volume there. relative paths only get their separators swapped.
+func nativePath(p string) string {
+	if p == "" {
+		return ""
+	}
+	if runtime.GOOS == "windows" && strings.HasPrefix(p, "/") {
+		return "C:" + filepath.FromSlash(p)
+	}
+	return filepath.FromSlash(p)
 }
 
 func TestRunWithWorktree_CreateWorktreeError(t *testing.T) {
