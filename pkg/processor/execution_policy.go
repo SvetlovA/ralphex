@@ -41,8 +41,8 @@ func (p *retryPolicy) Run(ctx context.Context, run func(context.Context, string)
 			return phase.ExecutionResult{Result: result.Result, TimedOut: true}
 		}
 
-		var limitErr *executor.LimitPatternError
-		if !errors.As(result.Result.Error, &limitErr) {
+		limitErr, ok := errors.AsType[*executor.LimitPatternError](result.Result.Error)
+		if !ok {
 			return result
 		}
 
