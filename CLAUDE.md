@@ -222,10 +222,14 @@ Key files:
 
 ## Platform Support
 
-- **Linux/macOS:** fully supported
-- **Windows:** builds and runs, but with limitations:
+- **Linux/macOS:** supported
+- **Windows:** best effort. It builds and runs, releases carry no Windows binary, and the maintainer
+  has no Windows machine, so a Windows-only report cannot be reproduced and a Windows-only fix
+  cannot be verified. Such an issue or PR is merged only when the cause is clear-cut, the change is
+  small and self-contained, and it cannot affect Linux or macOS; otherwise it is closed. Known gaps:
   - Process group signals not available (graceful shutdown kills direct process only, not child processes)
   - File locking not available (active session detection disabled)
+  - Ctrl+\ manual break not available
   - Prompts are passed to the claude CLI via stdin (not `-p` flag) to avoid the cmd.exe 8191-character command-line limit
 
 ### Cross-Platform Development

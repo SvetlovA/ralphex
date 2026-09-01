@@ -908,6 +908,18 @@ Agents to launch:
 - `agy` - Antigravity CLI, alternative provider for Claude phases (optional, via `scripts/agy-as-claude/`)
 - `pi` - alternative provider for Claude phases (optional, via `scripts/pi-as-claude/`)
 
+## Platform Support
+
+Linux and macOS are the supported platforms. Windows works on a best-effort basis: it builds and runs, but no Windows binaries are released, so it has to be installed from source, and the maintainer has no Windows machine and does not test there.
+
+Features missing on Windows:
+
+- the Ctrl+\ break (SIGQUIT) for pausing a task phase or terminating external review
+- file-lock-based active session detection, used by the web dashboard
+- cleanup of descendant processes on cancellation, since process group signals are unavailable
+
+Windows-only issues and pull requests can rarely be acted on, since the maintainer has no Windows machine to reproduce a report or verify a fix. A patch may still be merged when the cause is clear-cut, the change is small and self-contained, and it cannot affect Linux or macOS. Reports and patches that do not meet that bar are closed.
+
 ## Configuration
 
 ralphex uses a configuration directory at `~/.config/ralphex/` (override with `--config-dir` or `RALPHEX_CONFIG_DIR`) with the following structure:
