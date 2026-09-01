@@ -887,6 +887,12 @@ func TestExternalBackend_toRelative(t *testing.T) {
 		assert.Equal(t, filepath.Join("docs", "plans", "test.md"), rel)
 	})
 
+	t.Run("converts os-specific separators to forward slashes", func(t *testing.T) {
+		rel, err := eb.toRelative(filepath.Join("docs", "plans", "test.md"))
+		require.NoError(t, err)
+		assert.Equal(t, "docs/plans/test.md", rel, "git reports forward slashes on every platform")
+	})
+
 	t.Run("rejects .. path", func(t *testing.T) {
 		_, err := eb.toRelative("../outside.txt")
 		require.Error(t, err)
@@ -897,12 +903,14 @@ func TestExternalBackend_toRelative(t *testing.T) {
 		absPath := filepath.Join(eb.path, "docs", "plans", "test.md")
 		rel, err := eb.toRelative(absPath)
 		require.NoError(t, err)
-		assert.Equal(t, filepath.Join("docs", "plans", "test.md"), rel)
+		assert.Equal(t, "docs/plans/test.md", rel)
 	})
 
 	t.Run("rejects absolute path outside repo", func(t *testing.T) {
-		outsidePath := filepath.Join(t.TempDir(), "outside", "file.txt")
-		_, err := eb.toRelative(outsidePath)
+		// t.TempDir is absolute on every platform; a unix-style literal would fall into the
+		// relative branch on windows and never reach the check under test
+		outside := filepath.Join(t.TempDir(), "file.txt")
+		_, err := eb.toRelative(outside)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "outside repository")
 	})

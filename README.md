@@ -75,7 +75,7 @@ Then run:
 ralphex docs/plans/my-feature.md
 ```
 
-ralphex will create a branch, execute tasks, commit results, run multi-phase reviews, and move the plan to `completed/` when done.
+ralphex will create a branch, execute tasks, commit results, run multi-phase reviews, and move the plan to `completed/` when done (on the feature branch under `--worktree`).
 
 > [!WARNING]
 > **Anthropic Agent SDK billing change on June 15, 2026**
@@ -181,7 +181,7 @@ See [Custom External Review](#custom-external-review) for details on using custo
 1. Launches 2 agents (`quality` + `implementation`) for final review
 2. Focuses on critical/major issues only
 3. Iterates until no issues found
-4. Moves plan to `completed/` folder on success
+4. Moves plan to `completed/` folder on success (on the feature branch under `--worktree`)
 
 *Second review agents are configurable via `prompts/review_second.txt`.*
 
@@ -208,6 +208,8 @@ Edit `~/.config/ralphex/prompts/finalize.txt` (or `.ralphex/prompts/finalize.txt
 ### Plan Move Behavior (optional)
 
 After successful execution, ralphex moves the plan file into `docs/plans/completed/`. Enabled by default.
+
+Under `--worktree` the archive is committed on the feature branch, alongside the ticked plan. The copy in your main checkout is left exactly as it was — for a plan you never committed, it stays there unticked even after the branch merges. Delete it yourself if you don't want it.
 
 **How to disable:**
 
@@ -309,7 +311,7 @@ ralphex --review
 ralphex --external-only
 ```
 
-Worktrees are automatically removed on successful completion. If a run is interrupted, the worktree directory may remain and can be reused or removed manually.
+Worktrees are automatically removed on successful completion. Two cases leave one behind: an interrupted run, and a run whose plan archive did not complete — the worktree is kept so anything the archive staged can be recovered. The run still reports success and names the retained worktree; inspect it with `git -C <path> status` and run `git worktree remove <path>` before running that plan again, or the next run refuses with `worktree already exists`.
 
 ### Plan Creation
 
@@ -905,6 +907,18 @@ Agents to launch:
 - `gemini` - alternative provider for Claude phases (optional, via `scripts/gemini-as-claude/`)
 - `agy` - Antigravity CLI, alternative provider for Claude phases (optional, via `scripts/agy-as-claude/`)
 - `pi` - alternative provider for Claude phases (optional, via `scripts/pi-as-claude/`)
+
+## Platform Support
+
+Linux and macOS are the supported platforms. Windows works on a best-effort basis: it builds and runs, but no Windows binaries are released, so it has to be installed from source, and the maintainer has no Windows machine and does not test there.
+
+Features missing on Windows:
+
+- the Ctrl+\ break (SIGQUIT) for pausing a task phase or terminating external review
+- file-lock-based active session detection, used by the web dashboard
+- cleanup of descendant processes on cancellation, since process group signals are unavailable
+
+Windows-only issues and pull requests can rarely be acted on, since the maintainer has no Windows machine to reproduce a report or verify a fix. A patch may still be merged when the cause is clear-cut, the change is small and self-contained, and it cannot affect Linux or macOS. Reports and patches that do not meet that bar are closed.
 
 ## Configuration
 
