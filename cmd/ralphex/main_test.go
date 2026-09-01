@@ -3469,9 +3469,19 @@ func TestArchivePlanWorktree(t *testing.T) {
 	t.Run("rejected_commit_keeps_run_green", func(t *testing.T) {
 		run := setupWorktreeRun(t, true)
 
+		// on Windows exec.LookPath only recognizes files with extensions in PATHEXT
+		// (.exe/.cmd/.bat/...), so a shell-script shebang is not enough - write a .cmd.
+		// the event needs no caret escaping: its < and > sit inside double quotes,
+		// where cmd.exe already treats them literally.
+		const doneEvent = `{"type":"assistant","message":{"content":` +
+			`[{"type":"text","text":"<<<RALPHEX:ALL_TASKS_DONE>>>"}]}}`
 		fake := filepath.Join(t.TempDir(), "fake-claude")
-		writeExecutable(t, fake, "#!/bin/sh\necho '{\"type\":\"assistant\",\"message\":{\"content\":"+
-			"[{\"type\":\"text\",\"text\":\"<<<RALPHEX:ALL_TASKS_DONE>>>\"}]}}'\n")
+		if runtime.GOOS == "windows" {
+			fake += ".cmd"
+			writeExecutable(t, fake, "@echo off\r\necho "+doneEvent+"\r\n")
+		} else {
+			writeExecutable(t, fake, "#!/bin/sh\necho '"+doneEvent+"'\n")
+		}
 
 		hooks := filepath.Join(run.mainDir, ".git", "hooks")
 		require.NoError(t, os.MkdirAll(hooks, 0o750))
