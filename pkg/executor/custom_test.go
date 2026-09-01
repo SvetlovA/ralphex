@@ -324,8 +324,8 @@ func TestExecCustomRunner_Run(t *testing.T) {
 	// test the real runner with a simple command
 	runner := &execCustomRunner{}
 
-	// use echo which writes to stdout
-	stdout, wait, err := runner.Run(context.Background(), "echo", "hello")
+	// use a script that writes to stdout; the prompt file argument is ignored by it
+	stdout, wait, err := runner.Run(context.Background(), echoScript(t, "hello"), "prompt.txt")
 
 	require.NoError(t, err)
 	require.NotNil(t, stdout)

@@ -121,6 +121,8 @@ ralphex --preserve-anthropic-api-key docs/plans/feature.md
 - `agy` - Antigravity CLI, alternative provider for Claude phases (optional, via `scripts/agy-as-claude/`)
 - `pi` - alternative provider for Claude phases (optional, via `scripts/pi-as-claude/`)
 
+**Windows:** ralphex runs on Windows. npm-installed CLIs (`claude`, `codex`) work without configuration; a command pointed at an explicit `.cmd`/`.bat` path is invoked through `cmd /C` automatically. Limitation: graceful shutdown kills direct process only (not child processes). Active session detection via file locking works on Windows via `LockFileEx`.
+
 ## Platform Support
 
 Linux and macOS are the supported platforms. Windows works on a best-effort basis: it builds and runs, but no Windows binaries are released, so it has to be installed from source, and the maintainer has no Windows machine and does not test there. The Ctrl+\ break, file-lock-based active session detection, and cleanup of descendant processes on cancellation are unavailable on Windows. Windows-only issues and pull requests can rarely be acted on, since the maintainer has no Windows machine to reproduce a report or verify a fix. A patch may still be merged when the cause is clear-cut, the change is small and self-contained, and it cannot affect Linux or macOS. Reports and patches that do not meet that bar are closed.

@@ -9,12 +9,13 @@ import (
 	"io"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/umputun/ralphex/pkg/execx"
 )
 
 // CodexStreams holds both stderr and stdout from codex command.
@@ -60,9 +61,9 @@ func (r *execCodexRunner) Run(ctx context.Context, name string, args ...string) 
 		return CodexStreams{}, nil, fmt.Errorf("context already canceled: %w", err)
 	}
 
-	// use exec.Command (not CommandContext) because we handle cancellation ourselves
+	// use execx.Command (not execx.CommandContext) because we handle cancellation ourselves
 	// to ensure the entire process group is killed, not just the direct child
-	cmd := exec.Command(name, args...) //nolint:noctx // intentional: we handle context cancellation via process group kill
+	cmd := execx.Command(name, args...)
 
 	cmd.Env = r.childEnv(os.Environ())
 

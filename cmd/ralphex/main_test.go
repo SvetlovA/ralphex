@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -725,11 +726,13 @@ func TestPreserveAnthropicAPIKeyFlag(t *testing.T) {
 func TestProviderOverrideFlags(t *testing.T) {
 	t.Run("claude_command_overrides_config", func(t *testing.T) {
 		cfg := &config.Config{ClaudeCommand: "configured-claude"}
-		o := parseTestOpts(t, "--claude-command", "/tmp/run-claude")
+		// avoid leading '/' in the value: go-flags treats '/...' as a flag on Windows
+		// (cmd-style flag prefix) and rejects it as a missing argument.
+		o := parseTestOpts(t, "--claude-command", "tmp/run-claude")
 
 		require.NoError(t, applyCLIOverrides(o, cfg))
 
-		assert.Equal(t, "/tmp/run-claude", cfg.ClaudeCommand)
+		assert.Equal(t, "tmp/run-claude", cfg.ClaudeCommand)
 	})
 
 	t.Run("claude_args_overrides_config", func(t *testing.T) {
@@ -762,11 +765,12 @@ func TestProviderOverrideFlags(t *testing.T) {
 
 	t.Run("custom_review_script_overrides_config", func(t *testing.T) {
 		cfg := &config.Config{CustomReviewScript: "/configured/review.sh"}
-		o := parseTestOpts(t, "--custom-review-script", "/tmp/review.sh")
+		// avoid leading '/' in the value: go-flags treats '/...' as a flag on Windows.
+		o := parseTestOpts(t, "--custom-review-script", "tmp/review.sh")
 
 		require.NoError(t, applyCLIOverrides(o, cfg))
 
-		assert.Equal(t, "/tmp/review.sh", cfg.CustomReviewScript)
+		assert.Equal(t, "tmp/review.sh", cfg.CustomReviewScript)
 	})
 
 	t.Run("external_review_tool_cli_override_does_not_mutate_codex_enabled", func(t *testing.T) {
@@ -807,8 +811,15 @@ func TestRunAppliesClaudeCommandOverrideBeforeDependencyCheck(t *testing.T) {
 	configData := []byte("claude_command = " + missingCommand + "\n")
 	require.NoError(t, os.WriteFile(filepath.Join(cfgDir, "config"), configData, 0o600))
 
+	// on Windows exec.LookPath only recognizes files with extensions in PATHEXT
+	// (.exe/.cmd/.bat/...), so a shell-script shebang isn't enough — write a .cmd.
 	fakeClaude := filepath.Join(tmpDir, "fake-claude")
-	writeExecutable(t, fakeClaude, "#!/bin/sh\nexit 0\n")
+	if runtime.GOOS == "windows" {
+		fakeClaude += ".cmd"
+		writeExecutable(t, fakeClaude, "@echo off\r\nexit /b 0\r\n")
+	} else {
+		writeExecutable(t, fakeClaude, "#!/bin/sh\nexit 0\n")
+	}
 
 	workDir := filepath.Join(tmpDir, "work")
 	require.NoError(t, os.MkdirAll(workDir, 0o750))
@@ -2179,6 +2190,8 @@ func setupTestRepo(t *testing.T) string {
 	runGit(t, dir, "config", "user.email", "test@test.com")
 	runGit(t, dir, "config", "user.name", "test")
 	runGit(t, dir, "config", "commit.gpgsign", "false")
+	// pin line endings so a developer's global core.autocrlf cannot rewrite fixture content
+	runGit(t, dir, "config", "core.autocrlf", "false")
 	// a global core.hooksPath otherwise decides which hooks every commit in this repo runs
 	runGit(t, dir, "config", "core.hooksPath", filepath.Join(dir, ".git", "hooks"))
 
@@ -2201,6 +2214,8 @@ func initEmptyRepo(t *testing.T) string {
 	runGit(t, dir, "config", "user.email", "test@test.com")
 	runGit(t, dir, "config", "user.name", "test")
 	runGit(t, dir, "config", "commit.gpgsign", "false")
+	// pin line endings so a developer's global core.autocrlf cannot rewrite fixture content
+	runGit(t, dir, "config", "core.autocrlf", "false")
 	return dir
 }
 
@@ -2407,11 +2422,21 @@ func TestHandleEarlyFlags(t *testing.T) {
 		t.Cleanup(func() { require.NoError(t, os.Chdir(origDir)) })
 
 		// create a fake VCS script that outputs tmpDir as repo root
-		fakeVCS := filepath.Join(t.TempDir(), "fake-vcs.sh")
+		var fakeVCS string
+		if runtime.GOOS == "windows" {
+			fakeVCS = filepath.Join(t.TempDir(), "fake-vcs.cmd")
+		} else {
+			fakeVCS = filepath.Join(t.TempDir(), "fake-vcs.sh")
+		}
+
 		// resolve symlinks for consistent comparison (macOS /var -> /private/var)
 		resolvedTmpDir, resolveErr := filepath.EvalSymlinks(tmpDir)
 		require.NoError(t, resolveErr)
-		writeExecutable(t, fakeVCS, "#!/bin/sh\necho "+resolvedTmpDir+"\n")
+		if runtime.GOOS == "windows" {
+			writeExecutable(t, fakeVCS, "@echo off\necho "+resolvedTmpDir+"\n")
+		} else {
+			writeExecutable(t, fakeVCS, "#!/bin/sh\necho "+resolvedTmpDir+"\n")
+		}
 
 		cfgDir := t.TempDir()
 		require.NoError(t, os.WriteFile(filepath.Join(cfgDir, "config"),
@@ -2802,9 +2827,23 @@ func TestWorktreePlanFile(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.want, worktreePlanFile(tc.planFile, tc.repoRoot, tc.wtPath))
+			got := worktreePlanFile(nativePath(tc.planFile), nativePath(tc.repoRoot), nativePath(tc.wtPath))
+			assert.Equal(t, nativePath(tc.want), got)
 		})
 	}
+}
+
+// nativePath rewrites a posix-style table path into the running platform's form. worktreePlanFile
+// works on filepath.IsAbs and filepath.Rel, and "/repo/..." is not absolute on windows, so the
+// cases have to carry a volume there. relative paths only get their separators swapped.
+func nativePath(p string) string {
+	if p == "" {
+		return ""
+	}
+	if runtime.GOOS == "windows" && strings.HasPrefix(p, "/") {
+		return "C:" + filepath.FromSlash(p)
+	}
+	return filepath.FromSlash(p)
 }
 
 func TestRunWithWorktree_CreateWorktreeError(t *testing.T) {
@@ -3430,9 +3469,19 @@ func TestArchivePlanWorktree(t *testing.T) {
 	t.Run("rejected_commit_keeps_run_green", func(t *testing.T) {
 		run := setupWorktreeRun(t, true)
 
+		// on Windows exec.LookPath only recognizes files with extensions in PATHEXT
+		// (.exe/.cmd/.bat/...), so a shell-script shebang is not enough - write a .cmd.
+		// the event needs no caret escaping: its < and > sit inside double quotes,
+		// where cmd.exe already treats them literally.
+		const doneEvent = `{"type":"assistant","message":{"content":` +
+			`[{"type":"text","text":"<<<RALPHEX:ALL_TASKS_DONE>>>"}]}}`
 		fake := filepath.Join(t.TempDir(), "fake-claude")
-		writeExecutable(t, fake, "#!/bin/sh\necho '{\"type\":\"assistant\",\"message\":{\"content\":"+
-			"[{\"type\":\"text\",\"text\":\"<<<RALPHEX:ALL_TASKS_DONE>>>\"}]}}'\n")
+		if runtime.GOOS == "windows" {
+			fake += ".cmd"
+			writeExecutable(t, fake, "@echo off\r\necho "+doneEvent+"\r\n")
+		} else {
+			writeExecutable(t, fake, "#!/bin/sh\necho '"+doneEvent+"'\n")
+		}
 
 		hooks := filepath.Join(run.mainDir, ".git", "hooks")
 		require.NoError(t, os.MkdirAll(hooks, 0o750))

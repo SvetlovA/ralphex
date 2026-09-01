@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -1656,4 +1658,24 @@ func TestClaudeExecutor_Run_EffortFlag(t *testing.T) {
 		assert.NotContains(t, capturedArgs, "--effort=low", "equals form should be stripped")
 		assert.Equal(t, 1, countFlag(capturedArgs, "--effort"), "should have exactly one --effort flag")
 	})
+}
+
+// echoScript writes a script that prints msg to stdout and returns its path.
+// a plain "echo" cannot be used: on Windows it is a cmd.exe builtin rather than
+// an executable on PATH. the extension is platform-specific so the script runs
+// through the same path production uses - a .cmd batch file wrapped by
+// execx.Command on Windows, an executable shell script elsewhere.
+func echoScript(t *testing.T, msg string) string {
+	t.Helper()
+
+	dir := t.TempDir()
+	if runtime.GOOS == "windows" {
+		path := filepath.Join(dir, "echo.cmd")
+		require.NoError(t, os.WriteFile(path, []byte("@echo off\r\necho "+msg+"\r\n"), 0o600))
+		return path
+	}
+
+	path := filepath.Join(dir, "echo.sh")
+	require.NoError(t, os.WriteFile(path, []byte("#!/bin/sh\necho "+msg+"\n"), 0o700)) //nolint:gosec // script must be executable
+	return path
 }

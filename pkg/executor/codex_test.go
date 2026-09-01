@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -554,8 +555,8 @@ func TestExecCodexRunner_Run(t *testing.T) {
 	// test the real runner with a simple command
 	runner := &execCodexRunner{}
 
-	// use echo which writes to stdout
-	streams, wait, err := runner.Run(context.Background(), "echo", "hello")
+	// use a script that writes to stdout
+	streams, wait, err := runner.Run(context.Background(), echoScript(t, "hello"))
 
 	require.NoError(t, err)
 	require.NotNil(t, streams.Stdout)
@@ -576,16 +577,20 @@ func TestExecCodexRunner_Run_Stdin(t *testing.T) {
 	// test that stdin is piped to the child process (prompt via stdin for Windows compat)
 	prompt := "hello from stdin"
 	runner := &execCodexRunner{stdin: strings.NewReader(prompt)}
+	cmd := "cat"
+	if runtime.GOOS == "windows" {
+		cmd = "more"
+	}
 
 	// use cat which reads stdin and writes to stdout
-	streams, wait, err := runner.Run(context.Background(), "cat")
+	streams, wait, err := runner.Run(context.Background(), cmd)
 
 	require.NoError(t, err)
 	require.NotNil(t, streams.Stdout)
 
 	data, readErr := io.ReadAll(streams.Stdout)
 	require.NoError(t, readErr)
-	assert.Equal(t, prompt, string(data))
+	assert.Contains(t, string(data), prompt)
 
 	err = wait()
 	require.NoError(t, err)
@@ -1833,6 +1838,7 @@ func TestCodexExecutor_tailRolloutFile_streamsAssistantMessages(t *testing.T) {
 	// can resolve it via the same glob the real runtime uses.
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 	sessionID := "019e3bbe-9788-79f1-b668-deadbeefcafe"
 	dir := filepath.Join(home, ".codex", "sessions", "2026", "05", "18")
 	require.NoError(t, os.MkdirAll(dir, 0o750))
@@ -1907,6 +1913,7 @@ func TestCodexExecutor_tailRolloutFile_streamsAssistantMessages(t *testing.T) {
 func TestCodexExecutor_findRolloutFile(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 	e := &CodexExecutor{}
 
 	t.Run("returns empty when no file", func(t *testing.T) {

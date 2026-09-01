@@ -5,7 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
+
+	"github.com/umputun/ralphex/pkg/execx"
 )
 
 // customChannel runs a user script for notifications.
@@ -25,7 +26,7 @@ func (c *customChannel) send(ctx context.Context, r Result) error {
 		return fmt.Errorf("marshal result: %w", err)
 	}
 
-	cmd := exec.CommandContext(ctx, c.scriptPath)
+	cmd := execx.CommandContext(ctx, c.scriptPath)
 	cmd.Stdin = bytes.NewReader(data)
 
 	var stdout, stderr bytes.Buffer

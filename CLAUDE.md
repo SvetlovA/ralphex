@@ -30,6 +30,7 @@ go mod tidy && go mod vendor                           # tidy and re-vendor
 ```
 cmd/ralphex/        # main entry point, CLI parsing
 pkg/config/         # configuration loading, defaults, prompts, agents
+pkg/execx/          # platform-aware exec.Cmd creation (Windows .cmd/.bat wrapper)
 pkg/executor/       # claude and codex CLI execution
 pkg/git/            # git operations (external git CLI)
 pkg/input/          # terminal input collector (fzf/fallback, draft review)
@@ -228,9 +229,11 @@ Key files:
   cannot be verified. Such an issue or PR is merged only when the cause is clear-cut, the change is
   small and self-contained, and it cannot affect Linux or macOS; otherwise it is closed. Known gaps:
   - Process group signals not available (graceful shutdown kills direct process only, not child processes)
+  - File locking implemented via `LockFileEx` on a sentinel byte at offset 2^63-1 (full-range locks would block the Tailer, since Windows file locks are mandatory)
   - File locking not available (active session detection disabled)
   - Ctrl+\ manual break not available
   - Prompts are passed to the claude CLI via stdin (not `-p` flag) to avoid the cmd.exe 8191-character command-line limit
+  - `.cmd`/`.bat` wrapper: a command configured as an explicit batch path (e.g. `claude_command = C:\...\claude.cmd`) is invoked through `cmd /C` by `execx.Command`/`execx.CommandContext` (`pkg/execx`), which mirror `exec.Command`/`exec.CommandContext`. A bare name such as `claude` is left alone — `exec.LookPath` resolves it through `PATHEXT` and `os/exec` runs the resulting shim directly. An unresolvable name is also left alone, so `Start` reports `exec.ErrNotFound` rather than a cmd.exe exit code
 
 ### Cross-Platform Development
 
@@ -239,6 +242,7 @@ When adding platform-specific code (syscalls, signals, file locking):
 2. Create separate files: `foo_unix.go` and `foo_windows.go`
 3. Keep common code in the main file, extract platform-specific functions
 4. Windows stubs can be no-ops where functionality is optional
+5. When platform-specific behavior needs only `runtime.GOOS` (no platform-specific imports), use a single file instead of build-tag pairs. See `pkg/execx/execx.go` for an example
 
 Example files:
 - `pkg/executor/procgroup_unix.go` / `procgroup_windows.go` - process group management

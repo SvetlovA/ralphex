@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/umputun/ralphex/pkg/execx"
 )
 
 // externalBackend implements the backend interface by shelling out to the git CLI.
@@ -28,7 +30,7 @@ func newExternalBackend(path, command string) (*externalBackend, error) {
 	}
 
 	// validate path is a repo and get the toplevel
-	cmd := exec.CommandContext(context.Background(), command, "rev-parse", "--show-toplevel")
+	cmd := execx.CommandContext(context.Background(), command, "rev-parse", "--show-toplevel")
 	cmd.Dir = absPath
 	out, err := cmd.Output()
 	if err != nil {
@@ -54,7 +56,7 @@ func newExternalBackend(path, command string) (*externalBackend, error) {
 // leading whitespace is preserved (important for porcelain format parsing).
 // on failure, returns error with the combined output for diagnostics.
 func (e *externalBackend) run(args ...string) (string, error) {
-	cmd := exec.CommandContext(context.Background(), e.command, args...)
+	cmd := execx.CommandContext(context.Background(), e.command, args...)
 	cmd.Dir = e.path
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -124,7 +126,7 @@ func (e *externalBackend) diffFingerprint() (string, error) {
 
 // hasCommits returns true if the repository has at least one commit.
 func (e *externalBackend) hasCommits() (bool, error) {
-	cmd := exec.CommandContext(context.Background(), e.command, "rev-parse", "HEAD")
+	cmd := execx.CommandContext(context.Background(), e.command, "rev-parse", "HEAD")
 	cmd.Dir = e.path
 	cmd.Env = append(os.Environ(), "LC_ALL=C") // force English stderr for reliable parsing
 	if _, err := cmd.Output(); err != nil {
@@ -146,7 +148,7 @@ func (e *externalBackend) hasCommits() (bool, error) {
 
 // currentBranch returns the name of the current branch, or empty string for detached HEAD.
 func (e *externalBackend) currentBranch() (string, error) {
-	cmd := exec.CommandContext(context.Background(), e.command, "symbolic-ref", "--short", "HEAD")
+	cmd := execx.CommandContext(context.Background(), e.command, "symbolic-ref", "--short", "HEAD")
 	cmd.Dir = e.path
 	cmd.Env = append(os.Environ(), "LC_ALL=C") // force English stderr for reliable parsing
 	out, err := cmd.Output()
@@ -170,7 +172,7 @@ func (e *externalBackend) currentBranch() (string, error) {
 // detects from origin/HEAD symbolic reference, falls back to checking common branch names.
 func (e *externalBackend) getDefaultBranch() string {
 	// try origin/HEAD first
-	cmd := exec.CommandContext(context.Background(), e.command, "symbolic-ref", "refs/remotes/origin/HEAD")
+	cmd := execx.CommandContext(context.Background(), e.command, "symbolic-ref", "refs/remotes/origin/HEAD")
 	cmd.Dir = e.path
 	out, err := cmd.Output()
 	if err == nil {
@@ -301,6 +303,10 @@ func (e *externalBackend) hasChangesOtherThan(path string) ([]string, error) {
 		return nil, err
 	}
 
+	// normalize to forward slashes for comparison with git output,
+	// which always uses forward slashes even on Windows.
+	rel = filepath.ToSlash(rel)
+
 	// use -uall to list individual files, not collapsed directories
 	out, err := e.run("status", "--porcelain", "-uall")
 	if err != nil {
@@ -424,7 +430,7 @@ func (e *externalBackend) diffStats(baseBranch string) (DiffStats, error) {
 		return DiffStats{}, nil //nolint:nilerr // no HEAD means no stats
 	}
 
-	baseCmd := exec.CommandContext(context.Background(), e.command, "rev-parse", baseRef)
+	baseCmd := execx.CommandContext(context.Background(), e.command, "rev-parse", baseRef)
 	baseCmd.Dir = e.path
 	baseOut, err := baseCmd.Output()
 	if err != nil {
@@ -490,7 +496,7 @@ func (e *externalBackend) resolveRef(branchName string) string {
 	}
 
 	// try as arbitrary ref (commit hash, tag, etc.) via rev-parse
-	cmd := exec.CommandContext(context.Background(), e.command, "rev-parse", "--verify", "--quiet", branchName)
+	cmd := execx.CommandContext(context.Background(), e.command, "rev-parse", "--verify", "--quiet", branchName)
 	cmd.Dir = e.path
 	if cmd.Run() == nil {
 		return branchName
@@ -501,7 +507,7 @@ func (e *externalBackend) resolveRef(branchName string) string {
 
 // refExists checks if a git reference exists.
 func (e *externalBackend) refExists(ref string) bool {
-	cmd := exec.CommandContext(context.Background(), e.command, "show-ref", "--verify", "--quiet", ref)
+	cmd := execx.CommandContext(context.Background(), e.command, "show-ref", "--verify", "--quiet", ref)
 	cmd.Dir = e.path
 	return cmd.Run() == nil
 }

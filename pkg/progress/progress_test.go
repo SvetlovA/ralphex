@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -45,12 +46,12 @@ func TestNewLogger(t *testing.T) {
 		wantBase string
 		wantDir  string
 	}{
-		{name: "full mode with plan", cfg: Config{PlanFile: "docs/plans/feature.md", Mode: "full", Branch: "main"}, wantBase: "progress-feature.txt", wantDir: ".ralphex/progress"},
-		{name: "review mode with plan", cfg: Config{PlanFile: "docs/plans/feature.md", Mode: "review", Branch: "main"}, wantBase: "progress-feature-review.txt", wantDir: ".ralphex/progress"},
-		{name: "codex-only mode with plan", cfg: Config{PlanFile: "docs/plans/feature.md", Mode: "codex-only", Branch: "main"}, wantBase: "progress-feature-codex.txt", wantDir: ".ralphex/progress"},
-		{name: "full mode no plan", cfg: Config{Mode: "full", Branch: "main"}, wantBase: "progress.txt", wantDir: ".ralphex/progress"},
-		{name: "review mode no plan", cfg: Config{Mode: "review", Branch: "main"}, wantBase: "progress-review.txt", wantDir: ".ralphex/progress"},
-		{name: "codex-only mode no plan", cfg: Config{Mode: "codex-only", Branch: "main"}, wantBase: "progress-codex.txt", wantDir: ".ralphex/progress"},
+		{name: "full mode with plan", cfg: Config{PlanFile: "docs/plans/feature.md", Mode: "full", Branch: "main"}, wantBase: "progress-feature.txt", wantDir: filepath.Join(".ralphex", "progress")},
+		{name: "review mode with plan", cfg: Config{PlanFile: "docs/plans/feature.md", Mode: "review", Branch: "main"}, wantBase: "progress-feature-review.txt", wantDir: filepath.Join(".ralphex", "progress")},
+		{name: "codex-only mode with plan", cfg: Config{PlanFile: "docs/plans/feature.md", Mode: "codex-only", Branch: "main"}, wantBase: "progress-feature-codex.txt", wantDir: filepath.Join(".ralphex", "progress")},
+		{name: "full mode no plan", cfg: Config{Mode: "full", Branch: "main"}, wantBase: "progress.txt", wantDir: filepath.Join(".ralphex", "progress")},
+		{name: "review mode no plan", cfg: Config{Mode: "review", Branch: "main"}, wantBase: "progress-review.txt", wantDir: filepath.Join(".ralphex", "progress")},
+		{name: "codex-only mode no plan", cfg: Config{Mode: "codex-only", Branch: "main"}, wantBase: "progress-codex.txt", wantDir: filepath.Join(".ralphex", "progress")},
 	}
 
 	for _, tc := range tests {
@@ -66,7 +67,7 @@ func TestNewLogger(t *testing.T) {
 			defer l.Close()
 
 			assert.Equal(t, tc.wantBase, filepath.Base(l.Path()))
-			assert.Contains(t, filepath.ToSlash(l.Path()), tc.wantDir)
+			assert.Contains(t, filepath.ToSlash(l.Path()), filepath.ToSlash(tc.wantDir))
 
 			// verify header written
 			content, err := os.ReadFile(l.Path())
@@ -1258,6 +1259,31 @@ func TestNewLogger_CanonicalNameCollisionsShareHistoryBucket(t *testing.T) {
 	})
 }
 
+func TestSanitizeHistoryStem(t *testing.T) {
+	tests := []struct {
+		name       string
+		stem       string
+		want       string
+		wantOnUnix string
+	}{
+		{name: "ordinary stem untouched", stem: "feature-x", want: "feature-x", wantOnUnix: "feature-x"},
+		{name: "trailing dots trimmed on windows", stem: "progress-..", want: "progress-", wantOnUnix: "progress-.."},
+		{name: "trailing space trimmed on windows", stem: "plan ", want: "plan", wantOnUnix: "plan "},
+		{name: "all-dot stem falls back", stem: "...", want: "progress", wantOnUnix: "..."},
+		{name: "inner dots kept", stem: "v1.2.3-plan", want: "v1.2.3-plan", wantOnUnix: "v1.2.3-plan"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			want := tc.want
+			if runtime.GOOS != "windows" {
+				want = tc.wantOnUnix
+			}
+			assert.Equal(t, want, sanitizeHistoryStem(tc.stem))
+		})
+	}
+}
+
 func TestNewLogger_HistoryStemCannotEscapeHistoryDirectory(t *testing.T) {
 	tmpDir := t.TempDir()
 	origDir, _ := os.Getwd()
@@ -1270,7 +1296,12 @@ func TestNewLogger_HistoryStemCannotEscapeHistoryDirectory(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, l.Close())
 
-	archives, err := filepath.Glob(filepath.Join(tmpDir, progressDir, "history", "progress-..", "*.txt"))
+	// windows strips trailing dots from path components, so the stem is trimmed to stay reachable
+	stemDir := "progress-.."
+	if runtime.GOOS == "windows" {
+		stemDir = "progress-"
+	}
+	archives, err := filepath.Glob(filepath.Join(tmpDir, progressDir, "history", stemDir, "*.txt"))
 	require.NoError(t, err)
 	assert.Len(t, archives, 1)
 	escaped, err := filepath.Glob(filepath.Join(tmpDir, progressDir, "progress-..-*.txt"))
@@ -1890,7 +1921,7 @@ func TestLogger_PlanModeFilename(t *testing.T) {
 			defer l.Close()
 
 			assert.Equal(t, tc.wantBase, filepath.Base(l.Path()))
-			assert.Contains(t, filepath.ToSlash(l.Path()), ".ralphex/progress")
+			assert.Contains(t, filepath.ToSlash(l.Path()), filepath.ToSlash(filepath.Join(".ralphex", "progress")))
 
 			content, err := os.ReadFile(l.Path())
 			require.NoError(t, err)
