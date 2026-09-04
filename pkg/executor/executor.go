@@ -20,7 +20,7 @@ import (
 // Result holds execution result with output and detected signal.
 type Result struct {
 	Output         string // complete surfaced text output
-	RecentText     string // bounded recent surfaced text retained for display/debug compatibility
+	RecentText     string // bounded recent surfaced text matched only after a non-zero process exit or stream read failure
 	DiagnosticText string // bounded trusted CLI diagnostics used for pattern matching
 	Signal         string // detected signal (COMPLETED, FAILED, etc.) or empty
 	Error          error  // execution error if any
@@ -45,7 +45,7 @@ func (w *textWindow) add(text string) {
 	w.next++
 }
 
-func (w *textWindow) string() string {
+func (w *textWindow) text() string {
 	var result strings.Builder
 	start := w.next % recentBlockCount
 	for i := range recentBlockCount {
@@ -539,12 +539,12 @@ func (e *ClaudeExecutor) parseStream(ctx context.Context, r io.Reader, idleTouch
 	})
 
 	if err != nil {
-		return Result{Output: output.String(), RecentText: recentText.string(),
-			DiagnosticText: diagnostics.string(), Signal: signal, Error: fmt.Errorf("stream read: %w", err)}
+		return Result{Output: output.String(), RecentText: recentText.text(),
+			DiagnosticText: diagnostics.text(), Signal: signal, Error: fmt.Errorf("stream read: %w", err)}
 	}
 
-	return Result{Output: output.String(), RecentText: recentText.string(),
-		DiagnosticText: diagnostics.string(), Signal: signal}
+	return Result{Output: output.String(), RecentText: recentText.text(),
+		DiagnosticText: diagnostics.text(), Signal: signal}
 }
 
 // extractDiagnostic returns pattern input from structured Claude events. normal
@@ -555,7 +555,7 @@ func (e *ClaudeExecutor) extractDiagnostic(event *streamEvent) string {
 	case "assistant":
 		if event.IsAPIErrorMessage || event.Error != "" {
 			if text := e.extractText(event); text != "" {
-				return text
+				return formatStructuredError(event.APIErrorStatus, text)
 			}
 			return formatStructuredError(event.APIErrorStatus, event.Error, event.Description)
 		}
@@ -566,7 +566,7 @@ func (e *ClaudeExecutor) extractDiagnostic(event *streamEvent) string {
 		// diagnostic would readmit the quoted-summary false positive.
 		if isErrorResult(event) {
 			if text := extractResultText(event.Result); text != "" {
-				return text
+				return formatStructuredError(event.APIErrorStatus, text)
 			}
 			return formatStructuredError(event.APIErrorStatus, event.Error, event.Description)
 		}
