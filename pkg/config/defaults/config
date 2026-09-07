@@ -68,7 +68,7 @@ codex_enabled = true
 codex_command = codex
 
 # codex_model: model ID for codex
-# available models: gpt-5.6-sol, gpt-5.5, gpt-5.3-codex
+# run /model in an interactive codex session to see the models your account offers
 # default: gpt-5.6-sol
 # (set to an empty value, "codex_model =", to inherit from ~/.codex/config.toml instead;
 # commenting the line out keeps the gpt-5.6-sol default)
