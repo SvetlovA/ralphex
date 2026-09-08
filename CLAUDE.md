@@ -228,7 +228,22 @@ Key files:
   has no Windows machine, so a Windows-only report cannot be reproduced and a Windows-only fix
   cannot be verified. Such an issue or PR is merged only when the cause is clear-cut, the change is
   small and self-contained, and it cannot affect Linux or macOS; otherwise it is closed. Known gaps:
-  - Process group signals not available (graceful shutdown kills direct process only, not child processes)
+  - Descendant cleanup uses a Job Object, not process groups. `newProcessGroupCleanup`
+    (`pkg/executor/procgroup_windows.go`) creates an anonymous job with
+    `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` and assigns the started process to it, so descendants
+    join automatically and one `TerminateJobObject` reaches the whole tree. This matters more on
+    Windows than the Unix pgid kill does: an npm-installed CLI always sits behind a `cmd.exe`
+    shim (`claude.cmd` -> `cmd.exe` -> `node.exe`, plus another `cmd /C` layer from `execx` for an
+    explicit batch path), so killing `cmd.Process` reaches the shim and nothing below it, and
+    Windows never reparents orphans. `killProcess` is two-stage like the Unix SIGTERM/SIGKILL
+    pair - kill the direct child to break the tree's stdio pipes, wait `gracefulShutdownDelay`,
+    then terminate the job - because Windows has no signal that asks a process to shut down.
+    `Wait` reaps through `terminateJob` directly (no grace stage: the direct child has already
+    exited, so the delay would be paid on every iteration for nothing), mirroring the Unix
+    post-exit orphan reap; skipping it was what let stale `find`/`grep`/`head`/MCP processes
+    accumulate across a run. `CREATE_NEW_PROCESS_GROUP` is deliberately NOT set, since it would
+    suppress the console `CTRL_C_EVENT` broadcast that already tears the tree down on interactive
+    Ctrl+C. Job setup failure is logged and degrades to direct-process kill, never fails the run
   - File locking implemented via `LockFileEx` on a sentinel byte at offset 2^63-1 (full-range locks would block the Tailer, since Windows file locks are mandatory)
   - File locking not available (active session detection disabled)
   - Ctrl+\ manual break not available
