@@ -5,12 +5,20 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+var NewLine = func() string {
+	if runtime.GOOS == "windows" {
+		return "\r\n"
+	}
+	return "\n"
+}()
 
 func Test_newDefaultsInstaller(t *testing.T) {
 	installer := newDefaultsInstaller(defaultsFS)
@@ -351,6 +359,7 @@ func TestDefaultsInstaller_Install_MkdirAllFailure(t *testing.T) {
 }
 
 func TestDefaultsInstaller_Install_WriteFileFailure(t *testing.T) {
+	skipIfNoChmod(t)
 	tmpDir := t.TempDir()
 	configDir := filepath.Join(tmpDir, "config")
 	require.NoError(t, os.MkdirAll(configDir, 0o700))
@@ -368,6 +377,7 @@ func TestDefaultsInstaller_Install_WriteFileFailure(t *testing.T) {
 }
 
 func TestDefaultsInstaller_installDefaultFiles_ReadDirPermissionDenied(t *testing.T) {
+	skipIfNoChmod(t)
 	tmpDir := t.TempDir()
 	destDir := filepath.Join(tmpDir, "dest")
 	require.NoError(t, os.MkdirAll(destDir, 0o700))
@@ -383,6 +393,7 @@ func TestDefaultsInstaller_installDefaultFiles_ReadDirPermissionDenied(t *testin
 }
 
 func TestDefaultsInstaller_installDefaultFiles_WriteFilePermissionDenied(t *testing.T) {
+	skipIfNoChmod(t)
 	tmpDir := t.TempDir()
 	destDir := filepath.Join(tmpDir, "dest")
 	require.NoError(t, os.MkdirAll(destDir, 0o700))
@@ -402,7 +413,7 @@ func TestReset_CreatesConfigDirIfMissing(t *testing.T) {
 	configDir := filepath.Join(tmpDir, "nonexistent", "ralphex") // nested non-existent path
 
 	// config dir does not exist - reset should create it
-	stdin := strings.NewReader("y\ny\ny\n")
+	stdin := strings.NewReader("y" + NewLine + "y" + NewLine + "y")
 	stdout := &bytes.Buffer{}
 
 	result, err := Reset(configDir, stdin, stdout)
@@ -693,8 +704,10 @@ func TestReset_HandlesEOFGracefully(t *testing.T) {
 
 func TestReset_EmptyConfigDirFallback(t *testing.T) {
 	// set HOME to temp dir so DefaultConfigDir() doesn't touch real config
+	// on Windows, os.UserHomeDir() reads USERPROFILE rather than HOME
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
+	t.Setenv("USERPROFILE", tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, ".config"))
 
 	// install defaults so Reset has something to check

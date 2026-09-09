@@ -916,7 +916,6 @@ Features missing on Windows:
 
 - the Ctrl+\ break (SIGQUIT) for pausing a task phase or terminating external review
 - file-lock-based active session detection, used by the web dashboard
-- cleanup of descendant processes on cancellation, since process group signals are unavailable
 
 Windows-only issues and pull requests can rarely be acted on, since the maintainer has no Windows machine to reproduce a report or verify a fix. A patch may still be merged when the cause is clear-cut, the change is small and self-contained, and it cannot affect Linux or macOS. Reports and patches that do not meet that bar are closed.
 

@@ -6,7 +6,8 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
+
+	"github.com/umputun/ralphex/pkg/execx"
 )
 
 // CustomRunner abstracts command execution for custom review scripts.
@@ -24,9 +25,9 @@ func (r *execCustomRunner) Run(ctx context.Context, script, promptFile string) (
 		return nil, nil, fmt.Errorf("context already canceled: %w", err)
 	}
 
-	// use exec.Command (not CommandContext) because we handle cancellation ourselves
+	// use execx.Command (not execx.CommandContext) because we handle cancellation ourselves
 	// to ensure the entire process group is killed, not just the direct child
-	cmd := exec.Command(script, promptFile) //nolint:noctx // intentional: we handle context cancellation via process group kill
+	cmd := execx.Command(script, promptFile)
 
 	// create new process group so we can kill all descendants on cleanup
 	setupProcessGroup(cmd)

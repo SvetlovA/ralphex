@@ -28,6 +28,28 @@ func resolveSymlinks(t *testing.T, path string) string {
 	return resolved
 }
 
+// startWatcherForTest launches w.Start in a goroutine and registers cleanup
+// that cancels the context, waits for the watcher to fully exit, then closes
+// the session manager so tailers release file handles before t.TempDir cleanup
+// runs. on Windows, lingering tailer file handles prevent t.TempDir from
+// deleting progress files (unlinkat: file in use). cleanup is registered after
+// t.TempDir so it runs first (LIFO). returns the context for tests that need it.
+func startWatcherForTest(t *testing.T, w *Watcher, sm *SessionManager) context.Context {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_ = w.Start(ctx)
+	}()
+	t.Cleanup(func() {
+		cancel()
+		<-done
+		sm.Close()
+	})
+	return ctx
+}
+
 func TestIsProgressFile(t *testing.T) {
 	tests := []struct {
 		path     string
@@ -194,12 +216,7 @@ func TestWatcher_DetectsNewProgressFile(t *testing.T) {
 	w, err := NewWatcher([]string{tmpDir}, sm)
 	require.NoError(t, err)
 
-	ctx := t.Context()
-
-	// start watcher in background
-	go func() {
-		_ = w.Start(ctx)
-	}()
+	startWatcherForTest(t, w, sm)
 
 	// give watcher time to start
 	time.Sleep(100 * time.Millisecond)
@@ -232,12 +249,7 @@ func TestWatcher_IgnoresNonProgressFiles(t *testing.T) {
 	w, err := NewWatcher([]string{tmpDir}, sm)
 	require.NoError(t, err)
 
-	ctx := t.Context()
-
-	// start watcher in background
-	go func() {
-		_ = w.Start(ctx)
-	}()
+	startWatcherForTest(t, w, sm)
 
 	// give watcher time to start
 	time.Sleep(100 * time.Millisecond)
@@ -264,12 +276,7 @@ func TestWatcher_WatchesSubdirectories(t *testing.T) {
 	w, err := NewWatcher([]string{tmpDir}, sm)
 	require.NoError(t, err)
 
-	ctx := t.Context()
-
-	// start watcher in background
-	go func() {
-		_ = w.Start(ctx)
-	}()
+	startWatcherForTest(t, w, sm)
 
 	// give watcher time to start
 	time.Sleep(100 * time.Millisecond)
@@ -315,12 +322,7 @@ Started: 2026-01-22 10:00:00
 	w, err := NewWatcher([]string{tmpDir}, sm)
 	require.NoError(t, err)
 
-	ctx := t.Context()
-
-	// start watcher in background
-	go func() {
-		_ = w.Start(ctx)
-	}()
+	startWatcherForTest(t, w, sm)
 
 	// give watcher time to start and discover
 	time.Sleep(200 * time.Millisecond)
@@ -364,12 +366,7 @@ func TestWatcher_SkipsKnownDirectories(t *testing.T) {
 			w, err := NewWatcher([]string{tmpDir}, sm)
 			require.NoError(t, err)
 
-			ctx := t.Context()
-
-			// start watcher in background
-			go func() {
-				_ = w.Start(ctx)
-			}()
+			startWatcherForTest(t, w, sm)
 
 			// give watcher time to start
 			time.Sleep(100 * time.Millisecond)
@@ -406,12 +403,7 @@ func TestWatcher_WatchesUnknownHiddenDirectories(t *testing.T) {
 	w, err := NewWatcher([]string{tmpDir}, sm)
 	require.NoError(t, err)
 
-	ctx := t.Context()
-
-	// start watcher in background
-	go func() {
-		_ = w.Start(ctx)
-	}()
+	startWatcherForTest(t, w, sm)
 
 	// give watcher time to start
 	time.Sleep(100 * time.Millisecond)
@@ -444,12 +436,7 @@ func TestWatcher_StartTwiceIsIdempotent(t *testing.T) {
 	w, err := NewWatcher([]string{tmpDir}, sm)
 	require.NoError(t, err)
 
-	ctx := t.Context()
-
-	// start watcher in background
-	go func() {
-		_ = w.Start(ctx)
-	}()
+	ctx := startWatcherForTest(t, w, sm)
 
 	// give it time to start
 	time.Sleep(50 * time.Millisecond)
@@ -466,12 +453,7 @@ func TestWatcher_WatchesNewlyCreatedDirectories(t *testing.T) {
 	w, err := NewWatcher([]string{tmpDir}, sm)
 	require.NoError(t, err)
 
-	ctx := t.Context()
-
-	// start watcher in background
-	go func() {
-		_ = w.Start(ctx)
-	}()
+	startWatcherForTest(t, w, sm)
 
 	// give watcher time to start
 	time.Sleep(100 * time.Millisecond)
@@ -527,8 +509,7 @@ Started: 2026-01-22 10:00:00
 	w, err := NewWatcher([]string{tmpDir}, sm)
 	require.NoError(t, err)
 
-	ctx := t.Context()
-	go func() { _ = w.Start(ctx) }()
+	startWatcherForTest(t, w, sm)
 
 	// wait for initial discovery
 	sessionID := sessionIDFromPath(progressFile)
@@ -646,8 +627,7 @@ Started: 2026-01-22 10:00:00
 	w, err := NewWatcher([]string{tmpDir}, sm)
 	require.NoError(t, err)
 
-	ctx := t.Context()
-	go func() { _ = w.Start(ctx) }()
+	startWatcherForTest(t, w, sm)
 
 	sessionID := sessionIDFromPath(progressFile)
 	require.Eventually(t, func() bool {
@@ -741,8 +721,7 @@ Started: 2026-01-22 10:00:00
 	w, err := NewWatcher([]string{tmpDir}, sm)
 	require.NoError(t, err)
 
-	ctx := t.Context()
-	go func() { _ = w.Start(ctx) }()
+	startWatcherForTest(t, w, sm)
 
 	// allow initial startup; with the flock held, DiscoverRecursive's
 	// updateSession sees IsActive=true and leaves the active+tailing session
@@ -811,8 +790,7 @@ Started: 2026-01-22 10:00:00
 	w, err := NewWatcher([]string{tmpDir}, sm)
 	require.NoError(t, err)
 
-	ctx := t.Context()
-	go func() { _ = w.Start(ctx) }()
+	startWatcherForTest(t, w, sm)
 
 	idA := sessionIDFromPath(fileA)
 	idB := sessionIDFromPath(fileB)
@@ -900,6 +878,7 @@ func TestWatcher_StartTailingIfNeededReactivatesWithStoredOffset(t *testing.T) {
 
 	sm := NewSessionManager()
 	sm.Register(session)
+	t.Cleanup(sm.Close)
 
 	w, err := NewWatcher([]string{dir}, sm)
 	require.NoError(t, err)
