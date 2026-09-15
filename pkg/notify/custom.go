@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/umputun/ralphex/pkg/execx"
+	"github.com/SvetlovA/ralphex/pkg/execx"
 )
 
 // customChannel runs a user script for notifications.

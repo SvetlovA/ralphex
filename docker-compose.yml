@@ -1,7 +1,7 @@
 services:
   ralphex:
     build: .
-    image: ghcr.io/umputun/ralphex:latest
+    image: ghcr.io/svetlova/ralphex:latest
     ports:
       - "8080:8080"
     volumes:

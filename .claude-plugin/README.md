@@ -12,7 +12,7 @@ This directory contains the Claude Code plugin configuration for ralphex.
 Users can install via the plugin marketplace:
 
 ```bash
-/plugin marketplace add umputun/ralphex
+/plugin marketplace add SvetlovA/ralphex
 /plugin install ralphex@ralphex
 ```
 

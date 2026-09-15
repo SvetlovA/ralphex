@@ -27,10 +27,8 @@ which ralphex
 
 If `which ralphex` returns non-zero, briefly mention that ralphex is needed to execute the converted plan later (not now), list install options once, and continue immediately:
 
-- **macOS (Homebrew)**: `brew install umputun/apps/ralphex`
-- **Linux (Debian/Ubuntu)**: download `.deb` from https://github.com/umputun/ralphex/releases
-- **Linux (RHEL/Fedora)**: download `.rpm` from https://github.com/umputun/ralphex/releases
-- **Any platform with Go**: `go install github.com/umputun/ralphex/cmd/ralphex@latest`
+- **Windows (PowerShell)**: `irm https://raw.githubusercontent.com/SvetlovA/ralphex/windows/scripts/install-windows.ps1 | iex`
+- **Manual Windows install**: download the matching ZIP from https://github.com/SvetlovA/ralphex/releases and put `ralphex.windows.exe` on `PATH`
 
 If `which ralphex` succeeds, say nothing and proceed.
 

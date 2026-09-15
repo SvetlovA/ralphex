@@ -14,8 +14,8 @@ which ralphex
 ```
 
 **If not found**, guide installation:
-- **macOS (Homebrew)**: `brew install umputun/apps/ralphex`
-- **Any platform with Go**: `go install github.com/umputun/ralphex/cmd/ralphex@latest`
+- **Windows (PowerShell)**: `irm https://raw.githubusercontent.com/SvetlovA/ralphex/windows/scripts/install-windows.ps1 | iex`
+- **Manual Windows install**: download the matching ZIP from https://github.com/SvetlovA/ralphex/releases and put `ralphex.windows.exe` on `PATH`
 
 **Do not proceed until `which ralphex` succeeds.**
 

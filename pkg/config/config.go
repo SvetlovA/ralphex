@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/umputun/ralphex/pkg/notify"
+	"github.com/SvetlovA/ralphex/pkg/notify"
 )
 
 //go:embed defaults/config defaults/prompts/* defaults/agents/*

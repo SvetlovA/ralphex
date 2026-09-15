@@ -1,8 +1,8 @@
 {
   "name": "ralphex",
   "owner": {
-    "name": "umputun",
-    "email": "umputun@gmail.com"
+    "name": "Artem Svetlov",
+    "email": "svetlov.arte@gmail.com"
   },
   "plugins": [
     {
@@ -11,7 +11,7 @@
       "description": "Autonomous plan execution with Claude Code - task execution, monitoring, and plan creation",
       "version": "0.20.0",
       "author": {
-        "name": "umputun"
+        "name": "Artem Svetlov"
       }
     }
   ]

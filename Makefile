@@ -94,10 +94,10 @@ prep_site:
 	rm -rf site/site/docs/assets/claude && cp -rv assets/claude site/site/docs/assets/
 
 docker-build:
-	docker build -t ghcr.io/umputun/ralphex:latest .
+	docker build -t ghcr.io/svetlova/ralphex:latest .
 
 docker-build-go: docker-build
-	docker build -t ghcr.io/umputun/ralphex-go:latest -f Dockerfile-go .
+	docker build -t ghcr.io/svetlova/ralphex-go:latest -f Dockerfile-go .
 
 docker-run:
 	./scripts/ralphex-dk.sh $(ARGS)

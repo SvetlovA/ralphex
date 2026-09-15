@@ -17,8 +17,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/umputun/ralphex/pkg/executor/mocks"
-	"github.com/umputun/ralphex/pkg/status"
+	"github.com/SvetlovA/ralphex/pkg/executor/mocks"
+	"github.com/SvetlovA/ralphex/pkg/status"
 )
 
 func TestClaudeExecutor_Run_Success(t *testing.T) {
