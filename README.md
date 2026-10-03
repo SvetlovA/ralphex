@@ -10,7 +10,7 @@
 
 <h2 align="center">Autonomous plan execution with Claude Code and codex</h2>
 
-> This Windows-focused fork is maintained by [Artem Svetlov](https://github.com/SvetlovA). It is based on [Umputun's original ralphex project](https://github.com/umputun/ralphex), which made this work possible. Thank you, Umputun, for creating and sharing it.
+> This cross-platform fork is maintained by [Artem Svetlov](https://github.com/SvetlovA). It is based on [Umputun's original ralphex project](https://github.com/umputun/ralphex), which made this work possible. Thank you, Umputun, for creating and sharing it.
 >
 > Development and releases use the `windows` branch. The `master` branch is preserved for synchronizing changes from the upstream repository.
 
@@ -320,7 +320,7 @@ Worktrees are automatically removed on successful completion. Two cases leave on
 ### Plan Creation
 
 Plans can be created in several ways:
-- **[Claude Code](#claude-code-integration-optional)** - use slash commands like `/ralphex-plan` or your own planning workflows
+- **Claude Code** - use your own planning workflows
 - **Manually** - write markdown files directly in `docs/plans/`
 - **`--plan` flag** - integrated option that handles the entire flow
 - **Auto-detection** - running `ralphex` without arguments on master/main prompts for plan creation if no plans exist
@@ -358,6 +358,16 @@ After plan creation, you can choose to continue with immediate execution or exit
 
 ## Installation
 
+### From source (all platforms)
+
+```bash
+go install github.com/SvetlovA/ralphex/cmd/ralphex@windows
+```
+
+### Linux and macOS
+
+Download the archive for your OS and architecture from [this fork's releases](https://github.com/SvetlovA/ralphex/releases), extract `ralphex`, and place it in a directory on your `PATH`. Linux releases also include DEB and RPM packages. Archives include shell completions.
+
 ### Windows installer
 
 Run this in PowerShell:
@@ -376,9 +386,9 @@ ralphex --version
 
 Download the archive for your architecture from [this fork's releases](https://github.com/SvetlovA/ralphex/releases), extract `ralphex.windows.exe`, and place it in a directory on your `PATH`.
 
-Release tags use `v<upstream-version>-windows.<increment>`. For example, `v1.7.0-windows.1` is the first Windows-fork release based on upstream `v1.7.0`. Increment the final number for fork-only releases and reset it to `1` after adopting a newer upstream version.
+Release tags use `v<upstream-version>-windows.<increment>`. For example, `v1.7.0-windows.1` is the first fork release based on upstream `v1.7.0`. The `windows` suffix identifies the fork; releases include Linux, macOS, and Windows. Increment the final number for fork-only releases and reset it to `1` after adopting a newer upstream version.
 
-See [Windows release setup](docs/windows-release.md) for the release procedure and repository permissions.
+See [Release setup](docs/windows-release.md) for the release procedure and repository permissions.
 
 ### Using Docker
 
@@ -863,7 +873,7 @@ The entire system is designed for customization - both task execution and review
 - Run `ralphex --init` to create local `.ralphex/` project config with commented-out defaults
 - Run `ralphex --reset` to interactively restore defaults, or delete all files manually
 - Run `ralphex --dump-defaults <dir>` to extract raw defaults for comparison
-- Use the `/ralphex-update` Claude Code skill to smart-merge updated defaults into customized files
+- Use `ralphex --dump-defaults=<dir>` to extract defaults for comparison with customized files
 - Alternatively, reference agents already installed in your Claude Code directly in prompt files (see example below)
 
 **Prompt files** (`~/.config/ralphex/prompts/`):
@@ -920,14 +930,9 @@ Agents to launch:
 
 ## Platform Support
 
-Linux and macOS are the supported platforms. Windows works on a best-effort basis: it builds and runs, but no Windows binaries are released, so it has to be installed from source, and the maintainer has no Windows machine and does not test there.
+Linux, macOS, and Windows are supported. Releases include `amd64` and `arm64` binaries for all three platforms.
 
-Features missing on Windows:
-
-- the Ctrl+\ break (SIGQUIT) for pausing a task phase or terminating external review
-- file-lock-based active session detection, used by the web dashboard
-
-Windows-only issues and pull requests can rarely be acted on, since the maintainer has no Windows machine to reproduce a report or verify a fix. A patch may still be merged when the cause is clear-cut, the change is small and self-contained, and it cannot affect Linux or macOS. Reports and patches that do not meet that bar are closed.
+On Windows, the Ctrl+\ break (SIGQUIT) is unavailable. File-lock-based active session detection and descendant process cleanup are supported.
 
 ## Configuration
 
@@ -1254,7 +1259,7 @@ For full mode, start on master - ralphex creates a branch automatically from the
 
 **How do I restore default agents after customizing?**
 
-Run `ralphex --reset` to interactively reset global config. Select which components to reset (config, prompts, agents). Alternatively, delete all `.txt` files from `~/.config/ralphex/agents/` manually. To smart-merge updated defaults into customized files (preserving your changes), use the `/ralphex-update` Claude Code skill or `ralphex --dump-defaults <dir>` to extract defaults for manual comparison.
+Run `ralphex --reset` to interactively reset global config. Select which components to reset (config, prompts, agents). Alternatively, delete all `.txt` files from `~/.config/ralphex/agents/` manually. To smart-merge updated defaults into customized files (preserving your changes), use `ralphex --dump-defaults=<dir>` to extract defaults for manual comparison.
 
 **How do I disable a default agent?**
 
@@ -1408,60 +1413,6 @@ Multi-session features:
 - **Session sidebar** - lists all discovered sessions, click to switch (keyboard: `S` to toggle)
 - **Active detection** - pulsing indicator for running sessions via file locking
 - **Auto-discovery** - new sessions appear automatically as they start
-
-## Claude Code Integration (Optional)
-
-ralphex works standalone from the terminal. Optionally, you can add slash commands to Claude Code for a more integrated experience.
-
-### Available Commands
-
-| Command | Description |
-|---------|-------------|
-| `/ralphex` | Launch and monitor ralphex execution with interactive mode/plan selection |
-| `/ralphex-plan` | Create structured implementation plans with guided context gathering |
-| `/ralphex-adopt` | Convert plans from various source formats (OpenSpec, spec-kit, GitHub/GitLab issues, generic task-lists, free-form markdown) into ralphex-format plans |
-| `/ralphex-update` | Smart-merge updated embedded defaults into customized prompts/agents |
-
-### Installation
-
-The ralphex CLI is the primary interface. Claude Code skills (`/ralphex`, `/ralphex-plan`, `/ralphex-adopt`, and `/ralphex-update`) are optional convenience commands.
-
-**Via Plugin Marketplace (Recommended)**
-
-```bash
-# Add the Windows fork marketplace
-/plugin marketplace add SvetlovA/ralphex
-
-# Install the plugin
-/plugin install ralphex@ralphex
-```
-
-Benefits: Auto-updates when marketplace refreshes (at Claude Code startup).
-
-**Manual Installation (Alternative)**
-
-The slash command definitions are hosted in this repository:
-- [`/ralphex`](https://raw.githubusercontent.com/SvetlovA/ralphex/windows/assets/claude/ralphex.md)
-- [`/ralphex-plan`](https://raw.githubusercontent.com/SvetlovA/ralphex/windows/assets/claude/ralphex-plan.md)
-- [`/ralphex-adopt`](https://raw.githubusercontent.com/SvetlovA/ralphex/windows/assets/claude/ralphex-adopt.md)
-- [`/ralphex-update`](https://raw.githubusercontent.com/SvetlovA/ralphex/windows/assets/claude/ralphex-update.md)
-
-To install, ask Claude Code to "install ralphex slash commands" or manually copy the files to `~/.claude/commands/`.
-
-### Usage
-
-Once installed:
-
-```
-# in Claude Code conversation
-/ralphex-plan add user authentication    # creates plan interactively
-/ralphex docs/plans/auth.md              # launches execution
-"check ralphex"                          # gets status update
-```
-
-The `/ralphex` command runs ralphex in the background and provides status updates on request. The `/ralphex-plan` command guides you through creating well-structured plans with context discovery and approach selection.
-
-> **Note:** ralphex automatically strips Claude Code's per-session env vars (`CLAUDECODE`, `CLAUDE_CODE_SESSION_ID`, `CLAUDE_CODE_MESSAGING_SOCKET` and the rest of the set) from the Claude and Codex child processes, allowing it to run from inside Claude Code. Marker names are matched exactly, so configuration variables such as `CLAUDE_CODE_USE_BEDROCK` are preserved. However, running from a standalone terminal is still recommended for the best experience. If the nested session error is somehow encountered, ralphex detects it via error pattern matching and exits gracefully.
 
 ## For LLMs
 

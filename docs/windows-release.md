@@ -1,4 +1,4 @@
-# Windows Fork Release Guide
+# Fork Release Guide
 
 The `windows` branch is the default development and release branch for `SvetlovA/ralphex`. The `master` branch is reserved for synchronizing the fork with `umputun/ralphex`.
 
@@ -10,9 +10,11 @@ Tags use this format:
 v<upstream-version>-windows.<increment>
 ```
 
-For example, `v1.7.0-windows.1` is the first Windows-fork release based on upstream `v1.7.0`. Use `v1.7.0-windows.2` for the next fork-only release. After synchronizing with a newer upstream release, reset the fork increment, such as `v1.8.0-windows.1`.
+For example, `v1.7.0-windows.1` is the first fork release based on upstream `v1.7.0`. Use `v1.7.0-windows.2` for the next fork-only release. After synchronizing with a newer upstream release, reset the fork increment, such as `v1.8.0-windows.1`.
 
-The release workflow rejects tags that do not match this format, skip an increment, point outside the `windows` branch, or do not contain the corresponding upstream base tag. It passes the resolved base or previous fork tag to GoReleaser so generated notes cover only the relevant Windows changes.
+The `windows` suffix identifies the fork; every release includes Linux, macOS, and Windows builds.
+
+The release workflow rejects tags that do not match this format, skip an increment, point outside the `windows` branch, or do not contain the corresponding upstream base tag. It passes the resolved base or previous fork tag to GoReleaser so generated notes cover only the relevant fork changes.
 
 ## GitHub Actions secrets
 
@@ -20,7 +22,7 @@ No custom repository secrets are required.
 
 The workflows use GitHub's automatic `GITHUB_TOKEN` for these operations:
 
-- creating GitHub releases and uploading Windows artifacts;
+- creating GitHub releases and uploading Linux, macOS, and Windows artifacts;
 - publishing the `svetlova/ralphex` and `svetlova/ralphex-go` container packages to GHCR;
 - submitting CI coverage data.
 
@@ -39,4 +41,8 @@ git tag -a v1.7.0-windows.1 -m "Windows 1.7.0-windows.1"
 git push origin v1.7.0-windows.1
 ```
 
-The tag starts the release workflow. GoReleaser builds `amd64` and `arm64` ZIP archives. Each archive contains `ralphex.windows.exe` and the release page is created in `SvetlovA/ralphex`.
+The tag starts the release workflow. GoReleaser creates the release in `SvetlovA/ralphex` with `amd64` and `arm64` artifacts for each platform:
+
+- Linux and macOS: `.tar.gz` archives containing `ralphex` and shell completions.
+- Linux: DEB and RPM packages.
+- Windows: ZIP archives containing `ralphex.windows.exe`, compatible with the PowerShell installer.

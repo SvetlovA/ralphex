@@ -4,7 +4,7 @@ Autonomous plan execution with Claude Code - Go rewrite of ralph.py.
 
 ## LLM Documentation
 
-See @llms.txt for usage instructions and Claude Code integration commands.
+See @llms.txt for CLI usage instructions.
 
 ## Build Commands
 
@@ -223,11 +223,8 @@ Key files:
 
 ## Platform Support
 
-- **Linux/macOS:** supported
-- **Windows:** best effort. It builds and runs, releases carry no Windows binary, and the maintainer
-  has no Windows machine, so a Windows-only report cannot be reproduced and a Windows-only fix
-  cannot be verified. Such an issue or PR is merged only when the cause is clear-cut, the change is
-  small and self-contained, and it cannot affect Linux or macOS; otherwise it is closed. Known gaps:
+- **Linux/macOS/Windows:** supported, with amd64 and arm64 release binaries.
+- **Windows platform details:**
   - Descendant cleanup uses a Job Object, not process groups. `newProcessGroupCleanup`
     (`pkg/executor/procgroup_windows.go`) creates an anonymous job with
     `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` and assigns the started process to it, so descendants
@@ -388,8 +385,6 @@ Variables are also expanded inside agent content, so custom agents can use `{{DE
 - Run `ralphex --init` to create local `.ralphex/` project config with commented-out defaults
 - Run `ralphex --reset` to interactively restore defaults, or delete ALL `.txt` files manually
 - Run `ralphex --dump-defaults <dir>` to extract raw embedded defaults for comparison or merging
-- Use `/ralphex-update` skill for smart merging of updated defaults into customized configs
-- Use `/ralphex-adopt` skill to convert plans from other formats (OpenSpec, spec-kit, GitHub/GitLab issues, task-lists, free-form markdown) into ralphex format
 - Alternatively, reference agents installed in your Claude Code directly in prompt files (like `qa-expert`, `go-smells-expert`)
 
 ## Testing
@@ -529,7 +524,6 @@ If you're an AI agent preparing a contribution, complete this checklist:
 - Template overrides: `site/overrides/` with `custom_dir: overrides` in mkdocs.yml
 - **Python version**: Zensical requires Python ≥ 3.10. Local builds use a venv at `site/.venv/` (auto-created by `make prep_site`); Cloudflare Pages requires `PYTHON_VERSION` env var ≥ 3.10
 - **Brand color**: dark-mode palette uses Material's `teal` keyword, then `site/docs/stylesheets/extra.css` overrides `--md-primary-fg-color` / `--md-accent-fg-color` to `#2dd4bf` (Tailwind teal-400) so the docs match the landing page brand color
-- **Raw .md files**: SSG renders ALL `.md` files in `docs_dir` as HTML pages. To serve raw markdown (e.g., `assets/claude/*.md` for Claude Code skills), copy them AFTER `zensical build` - see `prep_site` target in Makefile
 
 ## Testing Safety Rules
 
@@ -540,7 +534,6 @@ If you're an AI agent preparing a contribution, complete this checklist:
 
 ## Workflow Rules
 
-- **Plugin version**: bump `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` versions on release if skill files (`assets/claude/`) changed since last plugin version bump
 - **CHANGELOG**: Never modify during development - updates are part of release process only
 - **Version sections**: Never add entries to existing version sections - versions are immutable once released
 - **Linter warnings**: Add exclusions to `.golangci.yml` instead of `_, _ =` prefixes for fmt.Fprintf/Fprintln

@@ -1,10 +1,19 @@
 version: 2
 
-before:
-  hooks:
-    - ./scripts/internal/update-plugin-version.sh {{ .Tag }}
-
 builds:
+  - id: ralphex
+    main: ./cmd/ralphex
+    binary: ralphex
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.revision={{.Tag}}-{{.ShortCommit}}-{{ trimsuffix (replace (replace .CommitDate "-" "") ":" "") "Z" }}
   - id: ralphex-windows
     main: ./cmd/ralphex
     binary: ralphex.windows
@@ -19,6 +28,15 @@ builds:
       - -s -w -X main.revision={{.Tag}}-{{.ShortCommit}}-{{ trimsuffix (replace (replace .CommitDate "-" "") ":" "") "Z" }}
 
 archives:
+  - id: ralphex
+    ids:
+      - ralphex
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    formats:
+      - tar.gz
+    files:
+      - completions/*
   - id: ralphex-windows
     ids:
       - ralphex-windows
@@ -27,7 +45,28 @@ archives:
     formats:
       - zip
 
+nfpms:
+  - id: ralphex
+    package_name: ralphex
+    ids:
+      - ralphex
+    vendor: SvetlovA
+    homepage: https://github.com/SvetlovA/ralphex
+    maintainer: SvetlovA
+    description: Autonomous plan execution with Claude Code
+    license: MIT
+    formats:
+      - deb
+      - rpm
+    contents:
+      - src: completions/ralphex.bash
+        dst: /usr/share/bash-completion/completions/ralphex
+      - src: completions/ralphex.zsh
+        dst: /usr/share/zsh/vendor-completions/_ralphex
+      - src: completions/ralphex.fish
+        dst: /usr/share/fish/vendor_completions.d/ralphex.fish
+
 release:
   prerelease: false
   make_latest: true
-  name_template: "Windows {{ .Version }}"
+  name_template: "{{ .Version }}"
