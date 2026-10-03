@@ -14,6 +14,16 @@ For example, `v1.7.0-windows.1` is the first fork release based on upstream `v1.
 
 The `windows` suffix identifies the fork; every release includes Linux, macOS, and Windows builds.
 
+Use `@windows` to install the latest commit on the fork's `windows` branch:
+
+```powershell
+go install github.com/SvetlovA/ralphex/cmd/ralphex.windows@windows
+```
+
+This follows branch commits and may include changes newer than the latest published release. To pin a release, replace `@windows` with its full tag, such as `@v1.7.0-windows.2`.
+
+Go treats `-windows.N` as a semantic-version prerelease suffix. `go install ...@latest` prefers stable tags such as `v1.7.0`, so use `@windows` for this branch. Marking a GitHub release as latest does not change Go's version selection.
+
 The release workflow rejects tags that do not match this format, skip an increment, point outside the `windows` branch, or do not contain the corresponding upstream base tag. It passes the resolved base or previous fork tag to GoReleaser so generated notes cover only the relevant fork changes.
 
 ## GitHub Actions secrets

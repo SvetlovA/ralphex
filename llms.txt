@@ -9,8 +9,10 @@ Autonomous plan execution with Claude Code. Executes implementation plans task b
 From source on any platform:
 
 ```bash
-go install github.com/SvetlovA/ralphex/cmd/ralphex.windows@latest
+go install github.com/SvetlovA/ralphex/cmd/ralphex.windows@windows
 ```
+
+Use `@windows` for the latest commit on the `windows` branch, including changes newer than published releases. Go treats `-windows.N` tags as prereleases, so `@latest` prefers the stable upstream tag. To pin a release, use its full tag, such as `@v1.7.0-windows.2`.
 
 Linux/macOS: download the matching archive from https://github.com/SvetlovA/ralphex/releases and install `ralphex` on your `PATH`. Linux DEB and RPM packages are also provided.
 

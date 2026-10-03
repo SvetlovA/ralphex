@@ -361,8 +361,10 @@ After plan creation, you can choose to continue with immediate execution or exit
 ### From source (all platforms)
 
 ```bash
-go install github.com/SvetlovA/ralphex/cmd/ralphex.windows@latest
+go install github.com/SvetlovA/ralphex/cmd/ralphex.windows@windows
 ```
+
+Use `@windows` to install the latest commit on this fork's `windows` branch, which may include changes newer than the latest published release. Go treats `-windows.N` tags as prereleases, so `@latest` prefers the stable upstream tag instead.
 
 On Windows, `go install` names the binary `ralphex.windows.exe`, allowing this fork to coexist with another `ralphex.exe`. On Linux and macOS, it installs `ralphex.windows`; use that command in place of `ralphex` in the examples. To build from a Windows checkout, run `make -f build/windows/Makefile build`; the output is `.bin/ralphex.windows.exe` for the `windows` branch and `.bin/ralphex.windows.<branch>.exe` for other branches (or tags).
 
