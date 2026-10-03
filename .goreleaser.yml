@@ -1,9 +1,5 @@
 version: 2
 
-before:
-  hooks:
-    - ./scripts/internal/update-plugin-version.sh {{ .Tag }}
-
 builds:
   - id: ralphex
     main: ./cmd/ralphex
@@ -18,24 +14,45 @@ builds:
       - arm64
     ldflags:
       - -s -w -X main.revision={{.Tag}}-{{.ShortCommit}}-{{ trimsuffix (replace (replace .CommitDate "-" "") ":" "") "Z" }}
+  - id: ralphex-windows
+    main: ./cmd/ralphex
+    binary: ralphex.windows
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.revision={{.Tag}}-{{.ShortCommit}}-{{ trimsuffix (replace (replace .CommitDate "-" "") ":" "") "Z" }}
 
 archives:
   - id: ralphex
-    builds:
+    ids:
       - ralphex
     name_template: >-
       {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    formats:
+      - tar.gz
     files:
       - completions/*
+  - id: ralphex-windows
+    ids:
+      - ralphex-windows
+    name_template: >-
+      ralphex_windows_{{ .Version }}_{{ .Arch }}
+    formats:
+      - zip
 
 nfpms:
   - id: ralphex
     package_name: ralphex
-    builds:
+    ids:
       - ralphex
-    vendor: umputun
-    homepage: https://github.com/umputun/ralphex
-    maintainer: umputun
+    vendor: SvetlovA
+    homepage: https://github.com/SvetlovA/ralphex
+    maintainer: SvetlovA
     description: Autonomous plan execution with Claude Code
     license: MIT
     formats:
@@ -49,15 +66,7 @@ nfpms:
       - src: completions/ralphex.fish
         dst: /usr/share/fish/vendor_completions.d/ralphex.fish
 
-brews:
-  - repository:
-      owner: umputun
-      name: homebrew-apps
-    directory: Formula
-    homepage: https://github.com/umputun/ralphex
-    description: Autonomous plan execution with Claude Code
-    license: MIT
-    extra_install: |
-      bash_completion.install "completions/ralphex.bash" => "ralphex"
-      zsh_completion.install "completions/ralphex.zsh" => "_ralphex"
-      fish_completion.install "completions/ralphex.fish" => "ralphex.fish"
+release:
+  prerelease: false
+  make_latest: true
+  name_template: "{{ .Version }}"

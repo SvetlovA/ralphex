@@ -16,7 +16,7 @@ import (
 	"github.com/charmbracelet/glamour"
 	"github.com/pmezard/go-difflib/difflib"
 
-	"github.com/umputun/ralphex/pkg/execx"
+	"github.com/SvetlovA/ralphex/pkg/execx"
 )
 
 // errInvalidInput is a sentinel error for validation failures in selectWithNumbers (bad number, out of range).

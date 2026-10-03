@@ -242,7 +242,7 @@ When using Bedrock mode, ralphex shows the provider configuration:
 
 **With profile-based credentials:**
 ```
-using image: ghcr.io/umputun/ralphex-go:latest
+using image: ghcr.io/svetlova/ralphex-go:latest
 claude provider: bedrock (keychain skipped)
   exporting credentials from profile: my-sso-profile
   passing: AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN, CLAUDE_CODE_USE_BEDROCK
@@ -250,7 +250,7 @@ claude provider: bedrock (keychain skipped)
 
 **With explicit credentials:**
 ```
-using image: ghcr.io/umputun/ralphex-go:latest
+using image: ghcr.io/svetlova/ralphex-go:latest
 claude provider: bedrock (keychain skipped)
   using explicit credentials
   passing: AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, CLAUDE_CODE_USE_BEDROCK

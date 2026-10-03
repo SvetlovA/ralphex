@@ -19,7 +19,7 @@ RUN \
 # Stage 2: Base runtime image
 FROM ghcr.io/umputun/baseimage/app:latest
 
-LABEL org.opencontainers.image.source="https://github.com/umputun/ralphex"
+LABEL org.opencontainers.image.source="https://github.com/SvetlovA/ralphex"
 LABEL org.opencontainers.image.description="Autonomous plan execution with Claude Code"
 LABEL org.opencontainers.image.licenses="MIT"
 

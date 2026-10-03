@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/umputun/ralphex/pkg/executor"
-	"github.com/umputun/ralphex/pkg/status"
+	"github.com/SvetlovA/ralphex/pkg/executor"
+	"github.com/SvetlovA/ralphex/pkg/status"
 )
 
 // ExternalReviewOutcome reports whether external review found issues.

@@ -3,12 +3,16 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/umputun/ralphex/actions/workflows/ci.yml"><img src="https://github.com/umputun/ralphex/actions/workflows/ci.yml/badge.svg" alt="build"></a>
-  <a href="https://coveralls.io/github/umputun/ralphex?branch=master"><img src="https://coveralls.io/repos/github/umputun/ralphex/badge.svg?branch=master" alt="Coverage Status"></a>
-  <a href="https://goreportcard.com/report/github.com/umputun/ralphex"><img src="https://goreportcard.com/badge/github.com/umputun/ralphex?v=2" alt="Go Report Card"></a>
+  <a href="https://github.com/SvetlovA/ralphex/actions/workflows/ci.yml"><img src="https://github.com/SvetlovA/ralphex/actions/workflows/ci.yml/badge.svg" alt="build"></a>
+  <a href="https://coveralls.io/github/SvetlovA/ralphex?branch=windows"><img src="https://coveralls.io/repos/github/SvetlovA/ralphex/badge.svg?branch=windows" alt="Coverage Status"></a>
+  <a href="https://goreportcard.com/report/github.com/SvetlovA/ralphex"><img src="https://goreportcard.com/badge/github.com/SvetlovA/ralphex?v=2" alt="Go Report Card"></a>
 </p>
 
 <h2 align="center">Autonomous plan execution with Claude Code and codex</h2>
+
+> This cross-platform fork is maintained by [Artem Svetlov](https://github.com/SvetlovA). It is based on [Umputun's original ralphex project](https://github.com/umputun/ralphex), which made this work possible. Thank you, Umputun, for creating and sharing it.
+>
+> Development and releases use the `windows` branch. The `master` branch is preserved for synchronizing changes from the upstream repository.
 
 *ralphex is a standalone CLI tool that runs in your terminal from the root of a git repository. It orchestrates Claude Code or codex to execute implementation plans autonomously - no IDE plugins or cloud services required, just a coding agent and a single binary.*
 
@@ -155,7 +159,7 @@ Launches 5 review agents **in parallel** via Claude Code Task tool:
 
 Claude verifies findings, fixes confirmed issues, and commits.
 
-*[Default agents](https://github.com/umputun/ralphex/tree/master/pkg/config/defaults/agents) provide common, language-agnostic review steps. They can be customized and tuned for your specific needs, languages, and workflows. See [Customization](#customization) for details.*
+*[Default agents](https://github.com/SvetlovA/ralphex/tree/windows/pkg/config/defaults/agents) provide common, language-agnostic review steps. They can be customized and tuned for your specific needs, languages, and workflows. See [Customization](#customization) for details.*
 
 ### Phase 3: External Review (optional)
 
@@ -316,7 +320,7 @@ Worktrees are automatically removed on successful completion. Two cases leave on
 ### Plan Creation
 
 Plans can be created in several ways:
-- **[Claude Code](#claude-code-integration-optional)** - use slash commands like `/ralphex-plan` or your own planning workflows
+- **Claude Code** - use your own planning workflows
 - **Manually** - write markdown files directly in `docs/plans/`
 - **`--plan` flag** - integrated option that handles the entire flow
 - **Auto-detection** - running `ralphex` without arguments on master/main prompts for plan creation if no plans exist
@@ -354,28 +358,44 @@ After plan creation, you can choose to continue with immediate execution or exit
 
 ## Installation
 
-### From source
+### From source (all platforms)
 
 ```bash
-go install github.com/umputun/ralphex/cmd/ralphex@latest
+go install github.com/SvetlovA/ralphex/cmd/ralphex@windows
 ```
 
-### Using Homebrew
+### Linux and macOS
 
-```bash
-brew install umputun/apps/ralphex
+Download the archive for your OS and architecture from [this fork's releases](https://github.com/SvetlovA/ralphex/releases), extract `ralphex`, and place it in a directory on your `PATH`. Linux releases also include DEB and RPM packages. Archives include shell completions.
+
+### Windows installer
+
+Run this in PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/SvetlovA/ralphex/windows/scripts/install-windows.ps1 | iex
 ```
 
-### From releases
+The installer downloads the latest Windows release from this repository, installs `ralphex.windows.exe` under `%LOCALAPPDATA%\Programs\ralphex`, adds a `ralphex.exe` command alias for compatibility with the examples below, and adds that directory to your user `PATH`. Open a new terminal, then verify the installation:
 
-Download the appropriate binary from [releases](https://github.com/umputun/ralphex/releases).
+```powershell
+ralphex --version
+```
+
+### Manual Windows installation
+
+Download the archive for your architecture from [this fork's releases](https://github.com/SvetlovA/ralphex/releases), extract `ralphex.windows.exe`, and place it in a directory on your `PATH`.
+
+Release tags use `v<upstream-version>-windows.<increment>`. For example, `v1.7.0-windows.1` is the first fork release based on upstream `v1.7.0`. The `windows` suffix identifies the fork; releases include Linux, macOS, and Windows. Increment the final number for fork-only releases and reset it to `1` after adopting a newer upstream version.
+
+See [Release setup](docs/windows-release.md) for the release procedure and repository permissions.
 
 ### Using Docker
 
 Download the wrapper script and install to PATH:
 
 ```bash
-curl -sL https://raw.githubusercontent.com/umputun/ralphex/master/scripts/ralphex-dk.sh -o /usr/local/bin/ralphex
+curl -sL https://raw.githubusercontent.com/SvetlovA/ralphex/windows/scripts/ralphex-dk.sh -o /usr/local/bin/ralphex
 chmod +x /usr/local/bin/ralphex
 ```
 
@@ -431,7 +451,7 @@ Then use `ralphex` as usual - it runs in a container with Claude Code and Codex 
 - Git config in `~/.gitconfig` (for commits)
 
 **Environment variables:**
-- `RALPHEX_IMAGE` - Docker image to use (default: `ghcr.io/umputun/ralphex-go:latest`). CLI flag: `--image`
+- `RALPHEX_IMAGE` - Docker image to use (default: `ghcr.io/svetlova/ralphex-go:latest`). CLI flag: `--image`
 - `RALPHEX_PORT` - Port for web dashboard when using `--serve` (default: `8080`). CLI flag: `--port`
 - `RALPHEX_CONFIG_DIR` - Custom config directory (default: `~/.config/ralphex`). Overrides global config location for prompts, agents, and settings
 - `CLAUDE_CONFIG_DIR` - Claude config directory (default: `~/.claude`). Use for alternate Claude installations (e.g., `~/.claude2`). Works both with Docker wrapper (volume mounts and keychain derivation) and non-Docker usage (passed through to Claude Code directly). Keychain service name is derived automatically from the path.
@@ -458,7 +478,7 @@ RALPHEX_CLI_UPDATE=1 ralphex docs/plans/feature.md
 Or bake it into a custom image so every run refreshes:
 
 ```dockerfile
-FROM ghcr.io/umputun/ralphex:latest
+FROM ghcr.io/svetlova/ralphex:latest
 ENV RALPHEX_CLI_UPDATE=1
 ```
 
@@ -549,8 +569,8 @@ Two images are published:
 
 | Image | Description |
 |-------|-------------|
-| `ghcr.io/umputun/ralphex:latest` | Base image with Claude Code, Codex, and core tools |
-| `ghcr.io/umputun/ralphex-go:latest` | Go development (extends base with Go toolchain) |
+| `ghcr.io/svetlova/ralphex:latest` | Base image with Claude Code, Codex, and core tools |
+| `ghcr.io/svetlova/ralphex-go:latest` | Go development (extends base with Go toolchain) |
 
 **Base image includes:**
 
@@ -580,13 +600,13 @@ Two images are published:
 
 **For Go projects**, use the `-go` image:
 ```bash
-RALPHEX_IMAGE=ghcr.io/umputun/ralphex-go:latest ralphex docs/plans/feature.md
+RALPHEX_IMAGE=ghcr.io/svetlova/ralphex-go:latest ralphex docs/plans/feature.md
 ```
 
 **For other languages**, create a custom image by extending the base with your language toolchain. The Go image (`Dockerfile-go`) shows the pattern:
 
 ```dockerfile
-FROM ghcr.io/umputun/ralphex:latest
+FROM ghcr.io/svetlova/ralphex:latest
 
 # install go from official distribution
 ARG GO_VERSION=1.26.0
@@ -605,7 +625,7 @@ RUN wget -qO- https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/inst
 
 Same approach for Rust, Java, or any other language:
 ```dockerfile
-FROM ghcr.io/umputun/ralphex:latest
+FROM ghcr.io/svetlova/ralphex:latest
 
 # rust
 RUN apk add --no-cache rust cargo
@@ -853,7 +873,7 @@ The entire system is designed for customization - both task execution and review
 - Run `ralphex --init` to create local `.ralphex/` project config with commented-out defaults
 - Run `ralphex --reset` to interactively restore defaults, or delete all files manually
 - Run `ralphex --dump-defaults <dir>` to extract raw defaults for comparison
-- Use the `/ralphex-update` Claude Code skill to smart-merge updated defaults into customized files
+- Use `ralphex --dump-defaults=<dir>` to extract defaults for comparison with customized files
 - Alternatively, reference agents already installed in your Claude Code directly in prompt files (see example below)
 
 **Prompt files** (`~/.config/ralphex/prompts/`):
@@ -910,14 +930,9 @@ Agents to launch:
 
 ## Platform Support
 
-Linux and macOS are the supported platforms. Windows works on a best-effort basis: it builds and runs, but no Windows binaries are released, so it has to be installed from source, and the maintainer has no Windows machine and does not test there.
+Linux, macOS, and Windows are supported. Releases include `amd64` and `arm64` binaries for all three platforms.
 
-Features missing on Windows:
-
-- the Ctrl+\ break (SIGQUIT) for pausing a task phase or terminating external review
-- file-lock-based active session detection, used by the web dashboard
-
-Windows-only issues and pull requests can rarely be acted on, since the maintainer has no Windows machine to reproduce a report or verify a fix. A patch may still be merged when the cause is clear-cut, the change is small and self-contained, and it cannot affect Linux or macOS. Reports and patches that do not meet that bar are closed.
+On Windows, the Ctrl+\ break (SIGQUIT) is unavailable. File-lock-based active session detection and descendant process cleanup are supported.
 
 ## Configuration
 
@@ -1100,7 +1115,7 @@ notify_webhook_urls = https://hooks.example.com/notify
 
 Supported channels: `telegram`, `email`, `slack`, `webhook`, `custom` (script). Misconfigured channels are detected at startup.
 
-See [notifications documentation](https://github.com/umputun/ralphex/blob/master/docs/notifications.md) for setup guides, message format examples, and custom script integration.
+See [notifications documentation](https://github.com/SvetlovA/ralphex/blob/windows/docs/notifications.md) for setup guides, message format examples, and custom script integration.
 
 **Prompt customization:**
 
@@ -1127,12 +1142,12 @@ The `claude_command` and `claude_args` config options let you replace Claude Cod
 
 Working examples are included:
 
-- [`scripts/codex-as-claude/codex-as-claude.sh`](https://github.com/umputun/ralphex/blob/master/scripts/codex-as-claude/codex-as-claude.sh) wraps codex to produce Claude-compatible events
-- [`scripts/copilot-as-claude/copilot-as-claude.sh`](https://github.com/umputun/ralphex/blob/master/scripts/copilot-as-claude/copilot-as-claude.sh) wraps GitHub Copilot CLI and translates its native JSONL stream into Claude-compatible events
-- [`scripts/gemini-as-claude/gemini-as-claude.sh`](https://github.com/umputun/ralphex/blob/master/scripts/gemini-as-claude/gemini-as-claude.sh) wraps Gemini CLI for the implementation slot
-- [`scripts/agy-as-claude/agy-as-claude.sh`](https://github.com/umputun/ralphex/blob/master/scripts/agy-as-claude/agy-as-claude.sh) wraps the Antigravity (`agy`) CLI — Google's successor to Gemini CLI — for the implementation slot
-- [`scripts/opencode/opencode-as-claude.sh`](https://github.com/umputun/ralphex/blob/master/scripts/opencode/opencode-as-claude.sh) wraps OpenCode CLI for the implementation slot, and `scripts/opencode/opencode-review.sh` is shipped alongside as a turn-key custom review script
-- [`scripts/pi-as-claude/pi-as-claude.sh`](https://github.com/umputun/ralphex/blob/master/scripts/pi-as-claude/pi-as-claude.sh) wraps the pi CLI, translating its `--mode json` JSONL events into Claude-compatible events
+- [`scripts/codex-as-claude/codex-as-claude.sh`](https://github.com/SvetlovA/ralphex/blob/windows/scripts/codex-as-claude/codex-as-claude.sh) wraps codex to produce Claude-compatible events
+- [`scripts/copilot-as-claude/copilot-as-claude.sh`](https://github.com/SvetlovA/ralphex/blob/windows/scripts/copilot-as-claude/copilot-as-claude.sh) wraps GitHub Copilot CLI and translates its native JSONL stream into Claude-compatible events
+- [`scripts/gemini-as-claude/gemini-as-claude.sh`](https://github.com/SvetlovA/ralphex/blob/windows/scripts/gemini-as-claude/gemini-as-claude.sh) wraps Gemini CLI for the implementation slot
+- [`scripts/agy-as-claude/agy-as-claude.sh`](https://github.com/SvetlovA/ralphex/blob/windows/scripts/agy-as-claude/agy-as-claude.sh) wraps the Antigravity (`agy`) CLI — Google's successor to Gemini CLI — for the implementation slot
+- [`scripts/opencode/opencode-as-claude.sh`](https://github.com/SvetlovA/ralphex/blob/windows/scripts/opencode/opencode-as-claude.sh) wraps OpenCode CLI for the implementation slot, and `scripts/opencode/opencode-review.sh` is shipped alongside as a turn-key custom review script
+- [`scripts/pi-as-claude/pi-as-claude.sh`](https://github.com/SvetlovA/ralphex/blob/windows/scripts/pi-as-claude/pi-as-claude.sh) wraps the pi CLI, translating its `--mode json` JSONL events into Claude-compatible events
 
 To use the included Copilot wrapper:
 
@@ -1171,7 +1186,7 @@ Provider-specific environment variables:
 - `PI_VERBOSE` - set to `1` to include tool execution events in the stream (default: `0`, only assistant text is shown)
 - `PI_EXTRA_ARGS` - extra flags appended verbatim to the pi invocation (word-split on whitespace); e.g. `--nolo-mode full` to auto-approve tools in non-interactive runs
 
-See [custom providers documentation](https://github.com/umputun/ralphex/blob/master/docs/custom-providers.md) for a detailed guide on writing wrappers for other providers.
+See [custom providers documentation](https://github.com/SvetlovA/ralphex/blob/windows/docs/custom-providers.md) for a detailed guide on writing wrappers for other providers.
 
 ### Swapping Implementation and Review Roles
 
@@ -1186,7 +1201,7 @@ custom_review_script = /path/to/scripts/opencode/opencode-review.sh
 
 The `claude_command` slot is documented above. The `custom_review_script` slot, including the script interface and expected output format, is documented in [Custom External Review](#custom-external-review).
 
-The repository ships a working custom review script at [`scripts/opencode/opencode-review.sh`](https://github.com/umputun/ralphex/blob/master/scripts/opencode/opencode-review.sh) that uses OpenCode CLI to produce review findings. Use it directly, or read it as a template when writing your own (for example, a `claude-as-review.sh` that calls Claude in the review slot).
+The repository ships a working custom review script at [`scripts/opencode/opencode-review.sh`](https://github.com/SvetlovA/ralphex/blob/windows/scripts/opencode/opencode-review.sh) that uses OpenCode CLI to produce review findings. Use it directly, or read it as a template when writing your own (for example, a `claude-as-review.sh` that calls Claude in the review slot).
 
 The wrappers under `scripts/codex-as-claude/`, `scripts/copilot-as-claude/`, `scripts/gemini-as-claude/`, `scripts/agy-as-claude/`, `scripts/opencode/`, and `scripts/pi-as-claude/` ship in the source tree but are not bundled with the binary. Vendor the one you need into your project (`.ralphex/scripts/`) or reference it from a checkout.
 
@@ -1203,9 +1218,9 @@ ralphex can work with Mercurial repositories through the `vcs_command` config op
 vcs_command = ~/.config/ralphex/scripts/hg2git.sh
 ```
 
-A reference translation script is included at [`scripts/hg2git/hg2git.sh`](https://github.com/umputun/ralphex/blob/master/scripts/hg2git/hg2git.sh). It maps the ~15 git subcommands ralphex uses internally to Mercurial equivalents, with phase-based commit logic (amend on draft, commit on public). Requires bash 4.0+ (for associative arrays used in diff stats parsing).
+A reference translation script is included at [`scripts/hg2git/hg2git.sh`](https://github.com/SvetlovA/ralphex/blob/windows/scripts/hg2git/hg2git.sh). It maps the ~15 git subcommands ralphex uses internally to Mercurial equivalents, with phase-based commit logic (amend on draft, commit on public). Requires bash 4.0+ (for associative arrays used in diff stats parsing).
 
-You will also need to customise prompt files to replace git commands that Claude executes as bash commands during reviews. See [Mercurial support documentation](https://github.com/umputun/ralphex/blob/master/docs/hg-support.md) for full setup instructions, prompt replacement examples, `.hgignore` setup, and known limitations.
+You will also need to customise prompt files to replace git commands that Claude executes as bash commands during reviews. See [Mercurial support documentation](https://github.com/SvetlovA/ralphex/blob/windows/docs/hg-support.md) for full setup instructions, prompt replacement examples, `.hgignore` setup, and known limitations.
 
 <details markdown>
 <summary><b>FAQ</b></summary>
@@ -1244,7 +1259,7 @@ For full mode, start on master - ralphex creates a branch automatically from the
 
 **How do I restore default agents after customizing?**
 
-Run `ralphex --reset` to interactively reset global config. Select which components to reset (config, prompts, agents). Alternatively, delete all `.txt` files from `~/.config/ralphex/agents/` manually. To smart-merge updated defaults into customized files (preserving your changes), use the `/ralphex-update` Claude Code skill or `ralphex --dump-defaults <dir>` to extract defaults for manual comparison.
+Run `ralphex --reset` to interactively reset global config. Select which components to reset (config, prompts, agents). Alternatively, delete all `.txt` files from `~/.config/ralphex/agents/` manually. To smart-merge updated defaults into customized files (preserving your changes), use `ralphex --dump-defaults=<dir>` to extract defaults for manual comparison.
 
 **How do I disable a default agent?**
 
@@ -1344,7 +1359,7 @@ Codex works the same way through its wrapper:
 claude_command = /path/to/scripts/codex-as-claude/codex-as-claude.sh
 ```
 
-Set `CODEX_MODEL` env var to choose the model. See [Using Alternative Providers](#using-alternative-providers-for-claude-phases) and [custom providers documentation](https://github.com/umputun/ralphex/blob/master/docs/custom-providers.md) for the included Copilot example and for writing wrappers for other tools.
+Set `CODEX_MODEL` env var to choose the model. See [Using Alternative Providers](#using-alternative-providers-for-claude-phases) and [custom providers documentation](https://github.com/SvetlovA/ralphex/blob/windows/docs/custom-providers.md) for the included Copilot example and for writing wrappers for other tools.
 
 **How do I use multiple Claude accounts?**
 
@@ -1398,60 +1413,6 @@ Multi-session features:
 - **Session sidebar** - lists all discovered sessions, click to switch (keyboard: `S` to toggle)
 - **Active detection** - pulsing indicator for running sessions via file locking
 - **Auto-discovery** - new sessions appear automatically as they start
-
-## Claude Code Integration (Optional)
-
-ralphex works standalone from the terminal. Optionally, you can add slash commands to Claude Code for a more integrated experience.
-
-### Available Commands
-
-| Command | Description |
-|---------|-------------|
-| `/ralphex` | Launch and monitor ralphex execution with interactive mode/plan selection |
-| `/ralphex-plan` | Create structured implementation plans with guided context gathering |
-| `/ralphex-adopt` | Convert plans from various source formats (OpenSpec, spec-kit, GitHub/GitLab issues, generic task-lists, free-form markdown) into ralphex-format plans |
-| `/ralphex-update` | Smart-merge updated embedded defaults into customized prompts/agents |
-
-### Installation
-
-The ralphex CLI is the primary interface. Claude Code skills (`/ralphex`, `/ralphex-plan`, `/ralphex-adopt`, and `/ralphex-update`) are optional convenience commands.
-
-**Via Plugin Marketplace (Recommended)**
-
-```bash
-# Add ralphex marketplace
-/plugin marketplace add umputun/ralphex
-
-# Install the plugin
-/plugin install ralphex@ralphex
-```
-
-Benefits: Auto-updates when marketplace refreshes (at Claude Code startup).
-
-**Manual Installation (Alternative)**
-
-The slash command definitions are hosted at:
-- [`/ralphex`](https://ralphex.com/assets/claude/ralphex.md)
-- [`/ralphex-plan`](https://ralphex.com/assets/claude/ralphex-plan.md)
-- [`/ralphex-adopt`](https://ralphex.com/assets/claude/ralphex-adopt.md)
-- [`/ralphex-update`](https://ralphex.com/assets/claude/ralphex-update.md)
-
-To install, ask Claude Code to "install ralphex slash commands" or manually copy the files to `~/.claude/commands/`.
-
-### Usage
-
-Once installed:
-
-```
-# in Claude Code conversation
-/ralphex-plan add user authentication    # creates plan interactively
-/ralphex docs/plans/auth.md              # launches execution
-"check ralphex"                          # gets status update
-```
-
-The `/ralphex` command runs ralphex in the background and provides status updates on request. The `/ralphex-plan` command guides you through creating well-structured plans with context discovery and approach selection.
-
-> **Note:** ralphex automatically strips Claude Code's per-session env vars (`CLAUDECODE`, `CLAUDE_CODE_SESSION_ID`, `CLAUDE_CODE_MESSAGING_SOCKET` and the rest of the set) from the Claude and Codex child processes, allowing it to run from inside Claude Code. Marker names are matched exactly, so configuration variables such as `CLAUDE_CODE_USE_BEDROCK` are preserved. However, running from a standalone terminal is still recommended for the best experience. If the nested session error is somehow encountered, ralphex detects it via error pattern matching and exits gracefully.
 
 ## For LLMs
 
