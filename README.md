@@ -361,8 +361,10 @@ After plan creation, you can choose to continue with immediate execution or exit
 ### From source (all platforms)
 
 ```bash
-go install github.com/SvetlovA/ralphex/cmd/ralphex@windows
+go install github.com/SvetlovA/ralphex/cmd/ralphex.windows@latest
 ```
+
+On Windows, `go install` names the binary `ralphex.windows.exe`, allowing this fork to coexist with another `ralphex.exe`. On Linux and macOS, it installs `ralphex.windows`; use that command in place of `ralphex` in the examples. To build from a Windows checkout, run `make -f build/windows/Makefile build`; the output is `.bin/ralphex.windows.exe` for the `windows` branch and `.bin/ralphex.windows.<branch>.exe` for other branches (or tags).
 
 ### Linux and macOS
 
@@ -376,11 +378,13 @@ Run this in PowerShell:
 irm https://raw.githubusercontent.com/SvetlovA/ralphex/windows/scripts/install-windows.ps1 | iex
 ```
 
-The installer downloads the latest Windows release from this repository, installs `ralphex.windows.exe` under `%LOCALAPPDATA%\Programs\ralphex`, adds a `ralphex.exe` command alias for compatibility with the examples below, and adds that directory to your user `PATH`. Open a new terminal, then verify the installation:
+The installer downloads the latest Windows release from this repository, installs only `ralphex.windows.exe` under `%LOCALAPPDATA%\Programs\ralphex`, and adds that directory to your user `PATH`. Use `ralphex.windows.exe` in place of `ralphex` in the examples to run this fork alongside another `ralphex.exe`. Open a new terminal, then verify the installation:
 
 ```powershell
-ralphex --version
+ralphex.windows.exe --version
 ```
+
+If you used an older installer, its `ralphex.exe` copy remains in the installation directory. You can remove that old copy manually; keep any separately installed `ralphex.exe` you want to continue using.
 
 ### Manual Windows installation
 

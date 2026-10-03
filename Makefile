@@ -9,7 +9,7 @@ REV=$(if $(filter --,$(GIT_REV)),latest,$(GIT_REV))
 all: test build
 
 build:
-	cd cmd/ralphex && go build -ldflags "-X main.revision=$(REV) -s -w" -o ../../.bin/ralphex.$(BRANCH)
+	cd cmd/ralphex.windows && go build -ldflags "-X main.revision=$(REV) -s -w" -o ../../.bin/ralphex.$(BRANCH)
 	cp .bin/ralphex.$(BRANCH) .bin/ralphex
 
 test:

@@ -9,7 +9,7 @@ Autonomous plan execution with Claude Code. Executes implementation plans task b
 From source on any platform:
 
 ```bash
-go install github.com/SvetlovA/ralphex/cmd/ralphex@windows
+go install github.com/SvetlovA/ralphex/cmd/ralphex.windows@latest
 ```
 
 Linux/macOS: download the matching archive from https://github.com/SvetlovA/ralphex/releases and install `ralphex` on your `PATH`. Linux DEB and RPM packages are also provided.
@@ -22,6 +22,8 @@ irm https://raw.githubusercontent.com/SvetlovA/ralphex/windows/scripts/install-w
 
 # releases: https://github.com/SvetlovA/ralphex/releases
 ```
+
+The Windows installer and `go install` install `ralphex.windows.exe` on Windows. Use that command instead of `ralphex` in the examples below. On Linux and macOS, `go install` names the command `ralphex.windows`. Build from a Windows checkout with `make -f build/windows/Makefile build` to produce `.bin/ralphex.windows.exe` on the `windows` branch or `.bin/ralphex.windows.<branch>.exe` on other branches (or tags).
 
 ## Quick Usage
 

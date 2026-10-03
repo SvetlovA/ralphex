@@ -39,7 +39,6 @@ try {
 
     New-Item -ItemType Directory -Path $InstallDirectory -Force | Out-Null
     Copy-Item -LiteralPath $sourceExecutable -Destination (Join-Path $InstallDirectory $executable) -Force
-    Copy-Item -LiteralPath $sourceExecutable -Destination (Join-Path $InstallDirectory "ralphex.exe") -Force
 
     $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
     $pathEntries = @($userPath -split ";" | Where-Object { $_ })
@@ -50,7 +49,7 @@ try {
     }
 
     Write-Host "Installed $executable from $($release.tag_name) to $InstallDirectory"
-    Write-Host "Run it as: ralphex --version (or ralphex.windows --version)"
+    Write-Host "Run it as: ralphex.windows.exe --version"
 }
 finally {
     if (Test-Path -LiteralPath $temporaryDirectory) {

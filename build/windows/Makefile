@@ -14,12 +14,12 @@ HASH=$(shell git rev-parse --short=7 HEAD 2>NUL)
 TIMESTAMP=$(shell git log -1 --format=%%ct HEAD 2>NUL)
 GIT_REV=$(BRANCH)-$(HASH)-$(TIMESTAMP)
 REV=$(if $(filter --,$(GIT_REV)),latest,$(GIT_REV))
+BINARY=ralphex.windows$(if $(filter windows,$(BRANCH)),,.$(BRANCH)).exe
 
 all: test build
 
 build:
-	cd $(ROOT)/cmd/ralphex && go build -ldflags "-X main.revision=$(REV) -s -w" -o ../../.bin/ralphex.$(BRANCH).exe
-	cd $(ROOT) && copy /Y .bin\ralphex.$(BRANCH).exe .bin\ralphex.exe
+	cd $(ROOT)/cmd/ralphex.windows && go build -ldflags "-X main.revision=$(REV) -s -w" -o ../../.bin/$(BINARY)
 
 test:
 	cd $(ROOT) && go clean -testcache

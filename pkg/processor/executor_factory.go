@@ -220,7 +220,7 @@ func fileExists(path string) bool {
 }
 
 // needsCodexBinary returns true when external codex review needs the codex binary.
-// first-class codex executor dependency checks happen in cmd/ralphex before runner construction.
+// first-class codex executor dependency checks happen in cmd/ralphex.windows before runner construction.
 func (*executorFactory) needsCodexBinary(appConfig *config.Config) bool {
 	if appConfig == nil {
 		return true

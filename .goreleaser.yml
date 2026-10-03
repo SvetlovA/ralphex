@@ -2,7 +2,7 @@ version: 2
 
 builds:
   - id: ralphex
-    main: ./cmd/ralphex
+    main: ./cmd/ralphex.windows
     binary: ralphex
     env:
       - CGO_ENABLED=0
@@ -15,7 +15,7 @@ builds:
     ldflags:
       - -s -w -X main.revision={{.Tag}}-{{.ShortCommit}}-{{ trimsuffix (replace (replace .CommitDate "-" "") ":" "") "Z" }}
   - id: ralphex-windows
-    main: ./cmd/ralphex
+    main: ./cmd/ralphex.windows
     binary: ralphex.windows
     env:
       - CGO_ENABLED=0
