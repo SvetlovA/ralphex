@@ -7,22 +7,21 @@
     <meta name="description" content="ralphex is the extended ralph loop: an autonomous orchestrator of coding agents (Claude Code, codex, GitHub Copilot CLI) that executes implementation plans task by task, then runs multi-agent code review.">
     <meta name="keywords" content="ralphex, ralph loop, ralph-loop, ralph loop claude code, ralph loop codex, claude code, codex, autonomous coding agent, AI code review, plan execution, AI agent orchestrator, code automation">
     <meta name="robots" content="index, follow">
-    <link rel="canonical" href="https://ralphex.com/">
+    <link rel="canonical" href="https://svetlova.github.io/ralphex/">
 
     <!-- Open Graph -->
     <meta property="og:type" content="website">
     <meta property="og:title" content="ralphex - The Extended Ralph Loop for Claude Code and codex">
     <meta property="og:description" content="The extended ralph loop. Autonomous orchestrator of coding agents (Claude Code, codex, Copilot CLI) for plan execution and multi-agent code review. Write a plan, start ralphex, walk away.">
-    <meta property="og:url" content="https://ralphex.com/">
-    <meta property="og:image" content="https://ralphex.com/assets/ralphex-og.png">
+    <meta property="og:url" content="https://svetlova.github.io/ralphex/">
+    <meta property="og:image" content="https://svetlova.github.io/ralphex/assets/ralphex-og.png">
     <meta property="og:site_name" content="ralphex">
 
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:site" content="@umputun">
     <meta name="twitter:title" content="ralphex - The Extended Ralph Loop">
     <meta name="twitter:description" content="The extended ralph loop. Autonomous orchestrator of coding agents (Claude Code, codex, Copilot CLI) for plan execution and multi-agent code review.">
-    <meta name="twitter:image" content="https://ralphex.com/assets/ralphex-og.png">
+    <meta name="twitter:image" content="https://svetlova.github.io/ralphex/assets/ralphex-og.png">
 
     <link rel="icon" type="image/png" href="favicon.png">
 
@@ -34,9 +33,9 @@
         "name": "ralphex",
         "alternateName": ["ralph loop", "ralph-loop", "extended ralph loop"],
         "description": "The extended ralph loop. ralphex is an autonomous orchestrator of coding agents (Claude Code, codex, GitHub Copilot CLI) that executes implementation plans task by task, then runs parallel multi-agent code review.",
-        "url": "https://ralphex.com",
+        "url": "https://svetlova.github.io/ralphex/",
         "applicationCategory": "DeveloperApplication",
-        "operatingSystem": "macOS, Linux, Windows",
+        "operatingSystem": "Linux, macOS, Windows",
         "keywords": "ralph loop, ralph-loop, claude code, codex, autonomous coding agent, AI code review, plan execution, AI agent orchestrator",
         "offers": {
             "@type": "Offer",
@@ -45,10 +44,10 @@
         },
         "author": {
             "@type": "Person",
-            "name": "Umputun",
-            "url": "https://github.com/umputun"
+            "name": "Artem Svetlov",
+            "url": "https://github.com/SvetlovA"
         },
-        "codeRepository": "https://github.com/umputun/ralphex",
+        "codeRepository": "https://github.com/SvetlovA/ralphex",
         "license": "https://opensource.org/licenses/MIT"
     }
     </script>
@@ -1027,7 +1026,7 @@
             <a href="#customize">Customize</a>
             <a href="#install">Install</a>
             <a href="#faq">FAQ</a>
-            <a href="https://github.com/umputun/ralphex" target="_blank">GitHub</a>
+            <a href="https://github.com/SvetlovA/ralphex" target="_blank">GitHub</a>
             <a href="docs/" class="btn-docs">Documentation</a>
         </div>
     </nav>
@@ -1541,7 +1540,7 @@
                     into ralphex's stream-json protocol &mdash; point <code>claude_command</code> at it in
                     your config. The wrapper approach also works for GitHub Copilot CLI, Cursor CLI, or any
                     agent with a compatible streaming output. See the
-                    <a href="https://github.com/umputun/ralphex/blob/master/docs/custom-providers.md" style="color:var(--teal);" target="_blank">custom providers documentation</a>
+                    <a href="https://github.com/SvetlovA/ralphex/blob/windows/docs/custom-providers.md" style="color:var(--teal);" target="_blank">custom providers documentation</a>
                     for details.
                 </p>
             </details>
@@ -1595,7 +1594,7 @@
                 <summary style="cursor:pointer; font-weight:600; color:var(--teal); font-family:'JetBrains Mono',monospace; font-size:1.05rem; list-style:none;">Where is ralphex on GitHub?</summary>
                 <p style="margin-top:1rem; color:var(--text-secondary); line-height:1.7;">
                     The source for ralphex lives at
-                    <a href="https://github.com/umputun/ralphex" style="color:var(--teal);" target="_blank">github.com/umputun/ralphex</a>.
+                    <a href="https://github.com/SvetlovA/ralphex" style="color:var(--teal);" target="_blank">github.com/SvetlovA/ralphex</a>.
                     Issues, discussions, and releases are all there. The project is open source under the
                     MIT license.
                 </p>
@@ -1612,31 +1611,31 @@
 
         <div class="install-options">
             <div class="install-card animate-on-scroll">
-                <h3>Homebrew (macOS)</h3>
-                <pre><code>brew install umputun/apps/ralphex</code></pre>
+                <h3>PowerShell</h3>
+                <pre><code>irm https://raw.githubusercontent.com/SvetlovA/ralphex/windows/scripts/install-windows.ps1 | iex</code></pre>
             </div>
 
             <div class="install-card animate-on-scroll">
-                <h3>Go Install</h3>
-                <pre><code>go install github.com/umputun/ralphex/cmd/ralphex@latest</code></pre>
+                <h3>From Source (All Platforms)</h3>
+                <pre><code>go install github.com/SvetlovA/ralphex/cmd/ralphex.windows@windows</code></pre>
+                <p>Installs the latest commit on the Windows fork branch, which may be newer than the latest published release.</p>
             </div>
 
             <div class="install-card animate-on-scroll">
                 <h3>Binary Releases</h3>
-                <pre><code># download from GitHub releases</code></pre>
-                <a href="https://github.com/umputun/ralphex/releases" class="releases-link" target="_blank">github.com/umputun/ralphex/releases</a>
+                <pre><code># Linux, macOS, and Windows</code></pre>
+                <a href="https://github.com/SvetlovA/ralphex/releases" class="releases-link" target="_blank">github.com/SvetlovA/ralphex/releases</a>
             </div>
         </div>
     </section>
 
     <footer>
         <div class="footer-links">
-            <a href="https://github.com/umputun/ralphex" target="_blank">GitHub</a>
+            <a href="https://github.com/SvetlovA/ralphex" target="_blank">GitHub</a>
             <a href="docs/">Documentation</a>
-            <a href="https://github.com/umputun/ralphex/releases" target="_blank">Releases</a>
-            <a href="https://t.me/umputun" target="_blank">Telegram</a>
+            <a href="https://github.com/SvetlovA/ralphex/releases" target="_blank">Releases</a>
         </div>
-        <p class="footer-copy">MIT License &copy; 2026 Umputun</p>
+        <p class="footer-copy">MIT License &copy; 2026 Artem Svetlov. Based on ralphex by Umputun.</p>
     </footer>
 
     <script>

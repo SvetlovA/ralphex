@@ -8,11 +8,11 @@ import (
 	"io"
 	"log"
 	"os"
-	"os/exec"
 	"strings"
 	"time"
 
-	"github.com/umputun/ralphex/pkg/status"
+	"github.com/SvetlovA/ralphex/pkg/execx"
+	"github.com/SvetlovA/ralphex/pkg/status"
 )
 
 //go:generate moq -out mocks/command_runner.go -pkg mocks -skip-ensure -fmt goimports . CommandRunner
@@ -118,9 +118,9 @@ func (r *execClaudeRunner) Run(ctx context.Context, name string, args ...string)
 		return nil, nil, fmt.Errorf("context already canceled: %w", err)
 	}
 
-	// use exec.Command (not CommandContext) because we handle cancellation ourselves
+	// use execx.Command (not execx.CommandContext) because we handle cancellation ourselves
 	// to ensure the entire process group is killed, not just the direct child
-	cmd := exec.Command(name, args...) //nolint:noctx // intentional: we handle context cancellation via process group kill
+	cmd := execx.Command(name, args...)
 
 	// build child env: always strip the Claude Code session markers (prevents nested
 	// session errors, see sessionEnvVars); strip

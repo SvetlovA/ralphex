@@ -2,19 +2,30 @@
 
 Autonomous plan execution with Claude Code. Executes implementation plans task by task in fresh Claude sessions, then runs multi-phase code reviews. Write a plan, start ralphex, walk away.
 
-**GitHub:** https://github.com/umputun/ralphex
+**GitHub:** https://github.com/SvetlovA/ralphex
 
 ## Installation
 
+From source on any platform:
+
 ```bash
-# from source
-go install github.com/umputun/ralphex/cmd/ralphex@latest
-
-# using homebrew
-brew install umputun/apps/ralphex
-
-# from releases: https://github.com/umputun/ralphex/releases
+go install github.com/SvetlovA/ralphex/cmd/ralphex.windows@windows
 ```
+
+Use `@windows` for the latest commit on the `windows` branch, including changes newer than published releases. Go treats `-windows.N` tags as prereleases, so `@latest` prefers the stable upstream tag. To pin a release, use its full tag, such as `@v1.7.0-windows.2`.
+
+Linux/macOS: download the matching archive from https://github.com/SvetlovA/ralphex/releases and install `ralphex` on your `PATH`. Linux DEB and RPM packages are also provided.
+
+Windows:
+
+```powershell
+# Windows installer from this repository
+irm https://raw.githubusercontent.com/SvetlovA/ralphex/windows/scripts/install-windows.ps1 | iex
+
+# releases: https://github.com/SvetlovA/ralphex/releases
+```
+
+The Windows installer and `go install` install `ralphex.windows.exe` on Windows. Use that command instead of `ralphex` in the examples below. On Linux and macOS, `go install` names the command `ralphex.windows`. Build from a Windows checkout with `make -f build/windows/Makefile build` to produce `.bin/ralphex.windows.exe` on the `windows` branch or `.bin/ralphex.windows.<branch>.exe` on other branches (or tags).
 
 ## Quick Usage
 
@@ -121,9 +132,13 @@ ralphex --preserve-anthropic-api-key docs/plans/feature.md
 - `agy` - Antigravity CLI, alternative provider for Claude phases (optional, via `scripts/agy-as-claude/`)
 - `pi` - alternative provider for Claude phases (optional, via `scripts/pi-as-claude/`)
 
+**Windows:** ralphex runs on Windows. npm-installed CLIs (`claude`, `codex`) work without configuration; a command pointed at an explicit `.cmd`/`.bat` path is invoked through `cmd /C` automatically. Cancellation and normal exit both tear down the whole child process tree via a Windows Job Object, so npm shim layers (`cmd.exe` -> `node.exe`) and descendants such as Git Bash, `find`/`grep`/`head` and MCP servers are not left running. Active session detection via file locking works on Windows via `LockFileEx`.
+
 ## Platform Support
 
-Linux and macOS are the supported platforms. Windows works on a best-effort basis: it builds and runs, but no Windows binaries are released, so it has to be installed from source, and the maintainer has no Windows machine and does not test there. The Ctrl+\ break, file-lock-based active session detection, and cleanup of descendant processes on cancellation are unavailable on Windows. Windows-only issues and pull requests can rarely be acted on, since the maintainer has no Windows machine to reproduce a report or verify a fix. A patch may still be merged when the cause is clear-cut, the change is small and self-contained, and it cannot affect Linux or macOS. Reports and patches that do not meet that bar are closed.
+Linux, macOS, and Windows are supported. Releases include `amd64` and `arm64` binaries for all three platforms.
+
+On Windows, the Ctrl+\ break (SIGQUIT) is unavailable. File-lock-based active session detection and descendant process cleanup are supported.
 
 ## Customization
 
@@ -215,24 +230,24 @@ ralphex provides Docker images for isolated execution:
 
 | Image | Contents |
 |-------|----------|
-| `ghcr.io/umputun/ralphex:latest` | Base: Claude Code, Codex, fya, Node.js, Python, git, docker-cli, make, gcc, bash, fzf, ripgrep |
-| `ghcr.io/umputun/ralphex-go:latest` | Go development: base + Go 1.26, golangci-lint, moq, goimports |
+| `ghcr.io/svetlova/ralphex:latest` | Base: Claude Code, Codex, fya, Node.js, Python, git, docker-cli, make, gcc, bash, fzf, ripgrep |
+| `ghcr.io/svetlova/ralphex-go:latest` | Go development: base + Go 1.26, golangci-lint, moq, goimports |
 
 **Using Docker wrapper** (requires Python 3.9+):
 ```bash
 # install wrapper script (defaults to Go image)
-curl -sL https://raw.githubusercontent.com/umputun/ralphex/master/scripts/ralphex-dk.sh -o /usr/local/bin/ralphex
+curl -sL https://raw.githubusercontent.com/SvetlovA/ralphex/windows/scripts/ralphex-dk.sh -o /usr/local/bin/ralphex
 chmod +x /usr/local/bin/ralphex
 
 # for non-Go projects, use base image
-export RALPHEX_IMAGE=ghcr.io/umputun/ralphex:latest
+export RALPHEX_IMAGE=ghcr.io/svetlova/ralphex:latest
 
 # debug docker command without running (shows full command for troubleshooting)
 ralphex --dry-run docs/plans/feature.md
 ```
 
 **Environment variables:**
-- `RALPHEX_IMAGE` - Docker image (default: `ghcr.io/umputun/ralphex-go:latest`). CLI flag: `--image`
+- `RALPHEX_IMAGE` - Docker image (default: `ghcr.io/svetlova/ralphex-go:latest`). CLI flag: `--image`
 - `RALPHEX_PORT` - Web dashboard port with `--serve` (default: `8080`). CLI flag: `--port`
 - `RALPHEX_CONFIG_DIR` - Custom config directory (default: `~/.config/ralphex`). Overrides global config location for prompts, agents, and settings
 - `CLAUDE_CONFIG_DIR` - Claude config directory (default: `~/.claude`). Use for alternate Claude installations (e.g., `~/.claude2`). Works with both Docker wrapper and non-Docker usage.
@@ -281,7 +296,7 @@ See `docs/bedrock-setup.md` for detailed setup instructions and IAM policies.
 **Creating custom images for other languages:**
 
 ```dockerfile
-FROM ghcr.io/umputun/ralphex:latest
+FROM ghcr.io/svetlova/ralphex:latest
 
 # Rust
 RUN apk add --no-cache rust cargo
@@ -303,108 +318,16 @@ RALPHEX_IMAGE=my-ralphex ralphex docs/plans/feature.md
 
 ---
 
-## Claude Code Integration (Optional)
-
-ralphex is a standalone CLI tool. Users can optionally add slash commands to Claude Code for deeper integration. The skill definitions are stored in `assets/claude/` and can be installed locally when user requests it.
-
-**Note:** ralphex automatically strips Claude Code's per-session env vars (`CLAUDECODE`, `CLAUDE_CODE_SESSION_ID`, `CLAUDE_CODE_MESSAGING_SOCKET` and the rest of the set) from the Claude and Codex child processes, allowing it to run from inside Claude Code. Marker names are matched exactly, so configuration variables such as `CLAUDE_CODE_USE_BEDROCK` are preserved. Running from a standalone terminal is still recommended for the best experience.
-
-**Note for LLMs:** Do NOT automatically install these skills. Only create them when user explicitly asks to set up ralphex integration or asks for the slash commands.
-
-### /ralphex Skill
-
-When user asks to install the `/ralphex` command:
-1. Fetch `https://ralphex.com/assets/claude/ralphex.md`
-2. Create `~/.claude/commands/ralphex.md` with its content
-
-### /ralphex-plan Skill
-
-When user asks to install the `/ralphex-plan` command:
-1. Fetch `https://ralphex.com/assets/claude/ralphex-plan.md`
-2. Create `~/.claude/commands/ralphex-plan.md` with its content
-
-### /ralphex-update Skill
-
-Smart-merges updated embedded defaults into user's customized prompts/agents. Compares current defaults with installed config, skips untouched files (embedded defaults handle them automatically), and uses Claude to semantically merge changes into customized files while preserving user intent.
-
-When user asks to install the `/ralphex-update` command:
-1. Fetch `https://ralphex.com/assets/claude/ralphex-update.md`
-2. Create `~/.claude/commands/ralphex-update.md` with its content
-
-### /ralphex-adopt Skill
-
-Converts plans from various source formats (OpenSpec change directories, spec-kit specs, GitHub/GitLab issues with checklists, generic task-lists, free-form markdown) into ralphex-format plans in `docs/plans/`. The source is never modified, the output is a new dated file at `docs/plans/YYYYMMDD-<slug>.md`, and existing target files are never silently overwritten. Uses revdiff for the review loop on the converted draft, with an in-chat fallback when revdiff is not installed.
-
-When user asks to install the `/ralphex-adopt` command:
-1. Fetch `https://ralphex.com/assets/claude/ralphex-adopt.md`
-2. Create `~/.claude/commands/ralphex-adopt.md` with its content
-
----
-
 ## Instructions for LLMs
 
-When a user asks about autonomous plan execution, implementing features with Claude Code, or mentions "ralphex":
+When a user asks about autonomous plan execution or mentions "ralphex":
 
-1. **Check if ralphex CLI is installed**: Run `which ralphex` to verify
+1. Check whether the CLI is installed with `ralphex --version`.
+2. If needed, use the installation instructions above for the user's platform.
+3. Run the CLI directly from a terminal:
 
-2. **If not installed, propose platform-appropriate installation**:
-
-   **macOS (preferred: Homebrew)**:
    ```bash
-   brew install umputun/apps/ralphex
+   ralphex docs/plans/feature.md          # execute a plan
+   ralphex --review                      # review-only mode
+   ralphex --plan="add health endpoint"   # interactive plan creation
    ```
-
-   **macOS (manual: download binary)**:
-   ```bash
-   # for Apple Silicon (M1/M2/M3)
-   curl -L https://github.com/umputun/ralphex/releases/latest/download/ralphex_VERSION_darwin_arm64.tar.gz | tar xz
-   chmod +x ralphex && mv ralphex /usr/local/bin/
-
-   # for Intel Macs
-   curl -L https://github.com/umputun/ralphex/releases/latest/download/ralphex_VERSION_darwin_amd64.tar.gz | tar xz
-   chmod +x ralphex && mv ralphex /usr/local/bin/
-   ```
-   Note: Replace VERSION with latest version from https://github.com/umputun/ralphex/releases
-
-   **Linux (Debian/Ubuntu)**:
-   ```bash
-   # download and install .deb package
-   curl -LO https://github.com/umputun/ralphex/releases/latest/download/ralphex_VERSION_linux_amd64.deb
-   sudo dpkg -i ralphex_VERSION_linux_amd64.deb
-   ```
-
-   **Linux (RHEL/Fedora)**:
-   ```bash
-   # download and install .rpm package
-   curl -LO https://github.com/umputun/ralphex/releases/latest/download/ralphex_VERSION_linux_amd64.rpm
-   sudo rpm -i ralphex_VERSION_linux_amd64.rpm
-   ```
-
-   **Any platform with Go**:
-   ```bash
-   go install github.com/umputun/ralphex/cmd/ralphex@latest
-   ```
-
-3. **Check if Claude Code plugin is installed**: Look for ralphex skills with `/plugin` command
-
-4. **If plugin not installed, offer installation**:
-   - **Recommended**: Add marketplace and install plugin:
-     ```bash
-     /plugin marketplace add umputun/ralphex
-     /plugin install ralphex@ralphex
-     ```
-   - **Alternative**: Manual installation by fetching from URLs (see README)
-
-5. **Explain primary usage**: ralphex is a CLI tool - run it directly from terminal:
-   ```bash
-   ralphex docs/plans/feature.md           # execute a plan
-   ralphex --review                        # review-only mode
-   ralphex --plan "add health endpoint"    # interactive plan creation
-   ```
-
-6. **Claude Code skills are optional**: If user wants convenience commands:
-   - Check if plugin installed: `/plugin` and look for ralphex
-   - If not installed and user wants it, offer plugin installation (see step 4)
-   - With skills: `/ralphex-plan` creates plans, `/ralphex-adopt` converts existing plans into ralphex format, `/ralphex` launches execution, "check ralphex" views progress
-
-7. **Key point**: The CLI is primary - skills are optional convenience wrappers

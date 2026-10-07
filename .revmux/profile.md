@@ -74,6 +74,6 @@ when the uncovered path is one of the failure classes above.
 ## Where the risk concentrates
 
 `pkg/git/` mutates the user's repository and is the only place data loss can originate. `pkg/executor/`
-parses streaming output from external CLIs whose formats change without notice. `cmd/ralphex/main.go`
+parses streaming output from external CLIs whose formats change without notice. `cmd/ralphex.windows/main.go`
 owns worktree lifecycle, signal handling and cleanup. `pkg/config/defaults/` is shipped instruction
 text. Weight findings in those four areas above the rest.

@@ -3,7 +3,7 @@ name: release
 on:
   push:
     tags:
-      - 'v*'
+      - 'v*-windows.*'
 
 permissions:
   contents: write
@@ -17,6 +17,39 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: verify Windows release tag and branch
+        shell: bash
+        run: |
+          if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-windows\.[1-9][0-9]*$ ]]; then
+            echo "invalid Windows release tag: $GITHUB_REF_NAME" >&2
+            exit 1
+          fi
+          git fetch origin windows
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/windows || {
+            echo "release tag must point to a commit on the windows branch" >&2
+            exit 1
+          }
+      - name: resolve previous release tag
+        shell: bash
+        run: |
+          [[ "$GITHUB_REF_NAME" =~ ^(v[0-9]+\.[0-9]+\.[0-9]+)-windows\.([1-9][0-9]*)$ ]]
+          base_tag="${BASH_REMATCH[1]}"
+          increment="${BASH_REMATCH[2]}"
+
+          if (( increment == 1 )); then
+            previous_tag="$base_tag"
+            git fetch --no-tags https://github.com/umputun/ralphex.git \
+              "refs/tags/$previous_tag:refs/tags/$previous_tag"
+          else
+            previous_tag="${base_tag}-windows.$((increment - 1))"
+            git fetch --no-tags origin "refs/tags/$previous_tag:refs/tags/$previous_tag"
+          fi
+
+          git merge-base --is-ancestor "$previous_tag" "$GITHUB_SHA" || {
+            echo "previous release tag $previous_tag is not an ancestor of $GITHUB_REF_NAME" >&2
+            exit 1
+          }
+          echo "GORELEASER_PREVIOUS_TAG=$previous_tag" >> "$GITHUB_ENV"
       - uses: actions/setup-go@v7
         with:
           go-version: stable
@@ -25,4 +58,4 @@ jobs:
           version: latest
           args: release --clean
         env:
-          GITHUB_TOKEN: ${{ secrets.GORELEASER_GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

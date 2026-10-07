@@ -3,7 +3,7 @@ package processor
 import (
 	"strings"
 
-	"github.com/umputun/ralphex/pkg/config"
+	"github.com/SvetlovA/ralphex/pkg/config"
 )
 
 type promptBuilder struct {

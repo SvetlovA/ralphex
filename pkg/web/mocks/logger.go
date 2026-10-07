@@ -6,7 +6,7 @@ package mocks
 import (
 	"sync"
 
-	"github.com/umputun/ralphex/pkg/status"
+	"github.com/SvetlovA/ralphex/pkg/status"
 )
 
 // LoggerMock is a mock implementation of web.Logger.
@@ -162,7 +162,7 @@ func (mock *LoggerMock) LogAnswerCalls() []struct {
 }
 
 // LogDraftReview calls LogDraftReviewFunc.
-func (mock *LoggerMock) LogDraftReview(action string, feedback string) {
+func (mock *LoggerMock) LogDraftReview(action, feedback string) {
 	if mock.LogDraftReviewFunc == nil {
 		panic("LoggerMock.LogDraftReviewFunc: method is nil but Logger.LogDraftReview was just called")
 	}

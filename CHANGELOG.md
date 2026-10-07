@@ -1,5 +1,26 @@
 # Changelog
 
+## v1.7.0-windows.1 - 2026-09-15
+
+### New Features
+
+- Add native Windows command execution for `.cmd` and `.bat` tools
+- Terminate descendant processes reliably with Windows Job Objects
+- Publish amd64 and arm64 Windows archives containing `ralphex.windows.exe`
+- Install the latest fork release with a repository-hosted PowerShell installer
+
+### Improved
+
+- Move the Go module, project links, plugin metadata, ownership, funding, and container images to `SvetlovA/ralphex`
+- Run release and container publishing with the automatic GitHub Actions token
+- Use `windows` as the development and release branch while preserving `master` for upstream synchronization
+- Improve Windows compatibility across tests, temporary paths, line endings, and process handling
+
+### Fixed
+
+- Stop watcher tests from leaking background tailers
+- Refresh upstream dependency versions included after v1.7.0
+
 ## v1.7.0 - 2026-09-07
 
 ### New Features

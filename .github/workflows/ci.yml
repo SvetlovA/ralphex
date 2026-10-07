@@ -2,8 +2,6 @@ name: build
 
 on:
   push:
-    branches:
-    tags:
   pull_request:
 
 permissions:
@@ -39,7 +37,7 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
-          # pinned: "latest" silently adopts new linters and turns a green master red
+          # pinned: "latest" silently adopts new linters and turns a green windows branch red
           # without a commit touching the repo
           version: v2.13.0
 
