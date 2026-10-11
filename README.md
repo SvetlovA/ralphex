@@ -322,14 +322,22 @@ This fork's Homebrew package is named `ralphex.windows`. Tap the repository and 
 ```bash
 brew tap SvetlovA/ralphex https://github.com/SvetlovA/ralphex.git
 brew install --cask ralphex.windows
-ralphex --version
+ralphex.windows --version
 ```
 
-The package installs the `ralphex` command and Bash, Zsh, and Fish completions. To update `ralphex.windows`:
+The package installs the `ralphex.windows` command and Bash, Zsh, and Fish completions. Use `ralphex.windows` in place of `ralphex` in the examples below. To update:
 
 ```bash
 brew update
 brew upgrade --cask ralphex.windows
+```
+
+If an older cask installed the executable as `ralphex`, reinstall after updating the tap to get the corrected command name, even when the release version is unchanged:
+
+```bash
+brew update
+brew reinstall --cask ralphex.windows
+ralphex.windows --version
 ```
 
 ### Linux and macOS installer

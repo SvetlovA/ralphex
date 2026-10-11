@@ -1,5 +1,13 @@
 # Updated by GoReleaser's Homebrew cask PR after each release.
 cask "ralphex.windows" do
+  rename "ralphex", "ralphex.windows"
+
+  on_macos do
+    postflight_steps do
+      run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "ralphex.windows"], chdir: ".", writable_paths: ["ralphex.windows"]
+    end
+  end
+
   version "1.7.0-windows.2"
 
   on_macos do
@@ -28,14 +36,8 @@ cask "ralphex.windows" do
   desc "Autonomous plan execution with Claude Code"
   homepage "https://github.com/SvetlovA/ralphex"
 
-  binary "ralphex"
+  binary "ralphex.windows"
   bash_completion "completions/ralphex.bash"
   zsh_completion "completions/ralphex.zsh"
   fish_completion "completions/ralphex.fish"
-
-  postflight do
-    if OS.mac?
-      system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/ralphex"]
-    end
-  end
 end

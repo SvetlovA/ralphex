@@ -71,19 +71,20 @@ homebrew_casks:
     ids:
       - ralphex
     binaries:
-      - ralphex
+      - ralphex.windows
     homepage: https://github.com/SvetlovA/ralphex
     description: Autonomous plan execution with Claude Code
     completions:
       bash: completions/ralphex.bash
       zsh: completions/ralphex.zsh
       fish: completions/ralphex.fish
-    hooks:
-      post:
-        install: |
-          if OS.mac?
-            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/ralphex"]
-          end
+    custom_block: |
+      rename "ralphex", "ralphex.windows"
+      on_macos do
+        postflight_steps do
+          run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "ralphex.windows"], chdir: ".", writable_paths: ["ralphex.windows"]
+        end
+      end
     repository:
       owner: SvetlovA
       name: ralphex

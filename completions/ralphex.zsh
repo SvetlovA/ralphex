@@ -1,4 +1,4 @@
-#compdef ralphex
+#compdef ralphex ralphex.windows
 
 # zsh completion for ralphex (generated via go-flags)
 _ralphex() {

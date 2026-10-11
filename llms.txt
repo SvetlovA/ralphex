@@ -11,7 +11,10 @@ macOS with Homebrew:
 ```bash
 brew tap SvetlovA/ralphex https://github.com/SvetlovA/ralphex.git
 brew install --cask ralphex.windows
+ralphex.windows --version
 ```
+
+Homebrew installs the `ralphex.windows` command; use it in place of `ralphex` below. For an older cask that installed `ralphex`, run `brew update` and `brew reinstall --cask ralphex.windows` after the cask correction is published.
 
 Linux/macOS installer (amd64/arm64, verifies SHA-256, installs to `~/.local/bin`):
 
