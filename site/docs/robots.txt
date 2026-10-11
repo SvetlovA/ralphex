@@ -1,5 +1,5 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://ralphex.com/sitemap.xml
-Sitemap: https://ralphex.com/docs/sitemap.xml
+Sitemap: https://svetlova.github.io/ralphex/sitemap.xml
+Sitemap: https://svetlova.github.io/ralphex/docs/sitemap.xml

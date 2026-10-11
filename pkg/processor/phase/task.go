@@ -7,8 +7,8 @@ import (
 	"io/fs"
 	"time"
 
-	"github.com/umputun/ralphex/pkg/plan"
-	"github.com/umputun/ralphex/pkg/status"
+	"github.com/SvetlovA/ralphex/pkg/plan"
+	"github.com/SvetlovA/ralphex/pkg/status"
 )
 
 // TaskPhase executes plan tasks until completion.

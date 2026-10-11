@@ -1,15 +1,15 @@
 site_name: RALPHEX Documentation
-site_url: https://ralphex.com/docs/
-site_author: Umputun
+site_url: https://svetlova.github.io/ralphex/docs/
+site_author: Artem Svetlov
 site_description: >-
   Autonomous plan execution with Claude Code
 
 docs_dir: docs-src
 site_dir: site/docs
 
-repo_name: umputun/ralphex
-repo_url: https://github.com/umputun/ralphex
-copyright: Some rights reserved &copy; 2026 Umputun
+repo_name: SvetlovA/ralphex
+repo_url: https://github.com/SvetlovA/ralphex
+copyright: Some rights reserved &copy; 2026 Artem Svetlov. Based on ralphex by Umputun.
 
 theme:
   name: material
@@ -41,11 +41,7 @@ extra:
   generator: true
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/umputun
-    - icon: fontawesome/brands/telegram
-      link: https://t.me/umputun
-    - icon: fontawesome/brands/twitter
-      link: https://twitter.com/umputun
+      link: https://github.com/SvetlovA
 
 markdown_extensions:
   - smarty

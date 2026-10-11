@@ -14,12 +14,12 @@ RUN \
         version=$(git describe --tags --always 2>/dev/null || echo "docker-$(date +%Y%m%dT%H%M%S)"); \
     else version=${GIT_BRANCH}-${GITHUB_SHA:0:7}-$(date +%Y%m%dT%H%M%S); fi && \
     echo "version=$version" && \
-    go build -o /build/ralphex -ldflags "-X main.revision=${version} -s -w" ./cmd/ralphex
+    go build -o /build/ralphex -ldflags "-X main.revision=${version} -s -w" ./cmd/ralphex.windows
 
 # Stage 2: Base runtime image
 FROM ghcr.io/umputun/baseimage/app:latest
 
-LABEL org.opencontainers.image.source="https://github.com/umputun/ralphex"
+LABEL org.opencontainers.image.source="https://github.com/SvetlovA/ralphex"
 LABEL org.opencontainers.image.description="Autonomous plan execution with Claude Code"
 LABEL org.opencontainers.image.licenses="MIT"
 
