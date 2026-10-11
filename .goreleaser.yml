@@ -66,6 +66,35 @@ nfpms:
       - src: completions/ralphex.fish
         dst: /usr/share/fish/vendor_completions.d/ralphex.fish
 
+homebrew_casks:
+  - name: ralphex.windows
+    ids:
+      - ralphex
+    binaries:
+      - ralphex
+    homepage: https://github.com/SvetlovA/ralphex
+    description: Autonomous plan execution with Claude Code
+    completions:
+      bash: completions/ralphex.bash
+      zsh: completions/ralphex.zsh
+      fish: completions/ralphex.fish
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/ralphex"]
+          end
+    repository:
+      owner: SvetlovA
+      name: ralphex
+      branch: homebrew-{{ .Version }}
+      pull_request:
+        enabled: true
+        base:
+          owner: SvetlovA
+          name: ralphex
+          branch: windows
+
 release:
   prerelease: false
   make_latest: true

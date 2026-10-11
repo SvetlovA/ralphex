@@ -81,49 +81,6 @@ ralphex docs/plans/my-feature.md
 
 ralphex will create a branch, execute tasks, commit results, run multi-phase reviews, and move the plan to `completed/` when done (on the feature branch under `--worktree`).
 
-> [!WARNING]
-> **Anthropic Agent SDK billing change on June 15, 2026**
->
-> Anthropic is moving `claude -p` / `claude --print`, Claude Agent SDK, and Claude Code GitHub Actions usage to a separate monthly Agent SDK credit pool for Claude subscription users. The default Claude mode in ralphex uses `claude --print` internally, so unattended ralphex runs are part of that pool. See Anthropic's [Agent SDK credit article](https://support.claude.com/en/articles/15036540-use-the-claude-agent-sdk-with-your-claude-plan) for the current billing rules.
->
-> Practical options:
->
-> 1. Do nothing. Light use may fit inside the included monthly credit. This should also be transparent for users who already run Claude Code through API-key billing, Bedrock, Vertex, Foundry, or another non-subscription provider path.
-> 2. Use a skill-based flow in an interactive Claude Code session. The author's [`umputun/cc-thingz`](https://github.com/umputun/cc-thingz) plugin collection includes the `planning` family (`/planning:make` and `/planning:exec`). That keeps work inside the normal interactive Claude Code flow instead of `claude --print`.
-> 3. Switch the ralphex executor to codex. First-class [`--codex`](#codex-executor-mode) support routes plan creation, task execution, both review phases, and finalize through the codex CLI and skips the external codex review phase.
-> 4. Use a `claude -p` compatible wrapper that drives an interactive Claude Code session and emits Claude-compatible `stream-json`. Examples that match ralphex's invocation shape include [`umputun/fya`](https://github.com/umputun/fya), [`melonamin/agentrun`](https://github.com/melonamin/agentrun), [`Equality-Machine/claude-p`](https://github.com/Equality-Machine/claude-p), and [`kcosr/claude-pty-wrapper`](https://github.com/kcosr/claude-pty-wrapper). These wrappers are unofficial and may break if Anthropic changes or blocks this pattern.
-
-<details markdown>
-<summary>Wrapper configuration examples</summary>
-
-Install `fya` with Homebrew:
-
-```bash
-brew install umputun/apps/fya
-command -v fya
-```
-
-Use the absolute path printed by `command -v fya` in ralphex config. On Apple Silicon Homebrew this is normally `/opt/homebrew/bin/fya`:
-
-```ini
-# in ~/.config/ralphex/config or .ralphex/config
-claude_command = /opt/homebrew/bin/fya
-claude_args = --dangerously-skip-permissions --output-format stream-json --verbose
-```
-
-On Intel Homebrew the path is normally `/usr/local/bin/fya`. If `command -v fya` prints another path, use that exact path instead.
-
-For `agentrun`, use its tmux-backed path if the goal is avoiding direct `claude --print`:
-
-```ini
-claude_command = /absolute/path/to/agentrun
-claude_args = --persist-session --no-session-persistence --dangerously-skip-permissions --output-format stream-json --verbose
-```
-
-These tools depend on interactive Claude Code behavior and local transcript files staying usable. Anthropic may detect or block wrapper-style automation later, so test the exact tool before relying on it.
-
-</details>
-
 ## How It Works
 
 ralphex executes plans in four phases with automated code reviews, plus an optional finalize step.
@@ -262,7 +219,7 @@ ralphex --external-only docs/plans/feature.md
 
 The `--codex` flag routes interactive plan creation (`--plan`), task execution, both review phases, and the optional finalize step through the codex CLI instead of Claude Code. The external review phase is automatically skipped because codex-reviewing-codex is a same-model self-review with weak signal; the cross-model independence between Claude and codex was the original reason that phase existed.
 
-**Why this exists:** in June 2026 Anthropic split the Claude Max subscription from the Claude Agent SDK, putting unattended ralphex runs on a separate $200 credit pool rather than the Max plan. Users with an OpenAI/codex plan can switch the entire ralphex pipeline to codex with one flag and stay on their existing OpenAI subscription instead.
+**Why this exists:** users who prefer Codex can run the entire ralphex pipeline through the Codex CLI with one flag.
 
 ```bash
 # create a plan through codex
@@ -358,6 +315,61 @@ After plan creation, you can choose to continue with immediate execution or exit
 
 ## Installation
 
+### macOS with Homebrew
+
+This fork's Homebrew package is named `ralphex.windows`. Tap the repository and install the release for Apple Silicon or Intel Macs:
+
+```bash
+brew tap SvetlovA/ralphex https://github.com/SvetlovA/ralphex.git
+brew install --cask ralphex.windows
+ralphex --version
+```
+
+The package installs the `ralphex` command and Bash, Zsh, and Fish completions. To update `ralphex.windows`:
+
+```bash
+brew update
+brew upgrade --cask ralphex.windows
+```
+
+### Linux and macOS installer
+
+Install the latest published release for `amd64` or `arm64`, without Go or root access:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/SvetlovA/ralphex/windows/scripts/install.sh | sh
+```
+
+The installer verifies the archive's SHA-256 checksum and installs `ralphex` into `~/.local/bin`. Add that directory to your shell configuration (`~/.zshrc` for Zsh or `~/.bashrc` for Bash), then open a new terminal:
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+ralphex --version
+```
+
+Run the installer again to update. To pin a release or choose another installation directory:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/SvetlovA/ralphex/windows/scripts/install.sh \
+  | RALPHEX_VERSION=v1.7.0-windows.2 RALPHEX_INSTALL_DIR="$HOME/.local/bin" sh
+```
+
+### Linux packages
+
+Download the `.deb` or `.rpm` matching your architecture (`amd64` or `arm64`) from [this fork's releases](https://github.com/SvetlovA/ralphex/releases), then install it with your package manager:
+
+```bash
+# Debian / Ubuntu (replace the filename with the downloaded package)
+sudo apt install ./ralphex_1.7.0-windows.2_linux_amd64.deb
+
+# Fedora / RHEL
+sudo dnf install ./ralphex_1.7.0-windows.2_linux_amd64.rpm
+
+ralphex --version
+```
+
+Packages include shell completions. To update, download and install the newer package using the same command.
+
 ### From source (all platforms)
 
 ```bash
@@ -368,7 +380,17 @@ Use `@windows` to install the latest commit on this fork's `windows` branch, whi
 
 On Windows, `go install` names the binary `ralphex.windows.exe`, allowing this fork to coexist with another `ralphex.exe`. On Linux and macOS, it installs `ralphex.windows`; use that command in place of `ralphex` in the examples. To build from a Windows checkout, run `make -f build/windows/Makefile build`; the output is `.bin/ralphex.windows.exe` for the `windows` branch and `.bin/ralphex.windows.<branch>.exe` for other branches (or tags).
 
-### Linux and macOS
+Go installs commands into `GOBIN` when set, otherwise the first `GOPATH` directory's `bin` folder (normally `~/go/bin`). Add the installation directory to your shell configuration on Linux or macOS:
+
+```bash
+export PATH="$HOME/go/bin:$PATH"
+# If you configured GOBIN or GOPATH, use its bin directory instead.
+ralphex.windows --version
+```
+
+On Windows, add the Go bin directory to your user `Path` and open a new terminal.
+
+### Manual Linux and macOS installation
 
 Download the archive for your OS and architecture from [this fork's releases](https://github.com/SvetlovA/ralphex/releases), extract `ralphex`, and place it in a directory on your `PATH`. Linux releases also include DEB and RPM packages. Archives include shell completions.
 

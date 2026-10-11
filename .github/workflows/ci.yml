@@ -34,6 +34,9 @@ jobs:
       - name: test container init script
         run: sh scripts/internal/init-docker_test.sh
 
+      - name: test release installer
+        run: python3 scripts/install_test.py
+
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:

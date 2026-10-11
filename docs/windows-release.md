@@ -33,12 +33,15 @@ No custom repository secrets are required.
 The workflows use GitHub's automatic `GITHUB_TOKEN` for these operations:
 
 - creating GitHub releases and uploading Linux, macOS, and Windows artifacts;
+- opening a PR to update `Casks/ralphex.windows.rb` in this repository after each release;
 - publishing the `svetlova/ralphex` and `svetlova/ralphex-go` container packages to GHCR;
 - submitting CI coverage data.
 
 Do not create `GORELEASER_GITHUB_TOKEN` or `PKG_TOKEN`; the fork workflows do not consume them.
 
 In **Settings → Actions → General → Workflow permissions**, select **Read and write permissions**. GitHub creates `GITHUB_TOKEN` for every workflow run, so it must not be added manually as a secret.
+
+Enable **Allow GitHub Actions to create and approve pull requests** in the same settings section. Homebrew updates use a PR because the `windows` branch requires review. GoReleaser writes the generated cask to a `homebrew-<version>` branch and opens a PR targeting `windows`; review and merge it to make the new version available through Homebrew. No separate tap repository or personal access token is needed.
 
 If GHCR already contains packages with restricted Actions access, open each package's settings and grant this repository write access.
 
@@ -56,3 +59,12 @@ The tag starts the release workflow. GoReleaser creates the release in `SvetlovA
 - Linux and macOS: `.tar.gz` archives containing `ralphex` and shell completions.
 - Linux: DEB and RPM packages.
 - Windows: ZIP archives containing `ralphex.windows.exe`, compatible with the PowerShell installer.
+
+After the release succeeds, merge its Homebrew cask update PR. Users can then install with:
+
+```bash
+brew tap SvetlovA/ralphex https://github.com/SvetlovA/ralphex.git
+brew install --cask ralphex.windows
+```
+
+Linux and macOS users can also run `scripts/install.sh` to download the latest release and verify its checksum. Linux DEB/RPM packages and the PowerShell installer use the same release assets. See the [README installation instructions](../README.md#installation) for commands, PATH setup, and version pinning.

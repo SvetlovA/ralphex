@@ -6,6 +6,22 @@ Autonomous plan execution with Claude Code. Executes implementation plans task b
 
 ## Installation
 
+macOS with Homebrew:
+
+```bash
+brew tap SvetlovA/ralphex https://github.com/SvetlovA/ralphex.git
+brew install --cask ralphex.windows
+```
+
+Linux/macOS installer (amd64/arm64, verifies SHA-256, installs to `~/.local/bin`):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/SvetlovA/ralphex/windows/scripts/install.sh | sh
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+Persist PATH in your shell configuration. Rerun the installer to update; set `RALPHEX_VERSION` to a full release tag to pin a version, or `RALPHEX_INSTALL_DIR` to change the destination. Linux DEB/RPM packages can be installed with `sudo apt install ./<package>.deb` or `sudo dnf install ./<package>.rpm`.
+
 From source on any platform:
 
 ```bash
@@ -13,6 +29,8 @@ go install github.com/SvetlovA/ralphex/cmd/ralphex.windows@windows
 ```
 
 Use `@windows` for the latest commit on the `windows` branch, including changes newer than published releases. Go treats `-windows.N` tags as prereleases, so `@latest` prefers the stable upstream tag. To pin a release, use its full tag, such as `@v1.7.0-windows.2`.
+
+Add the Go bin directory (normally `~/go/bin`, or your configured `GOBIN`) to PATH. On Linux/macOS, persist `export PATH="$HOME/go/bin:$PATH"` in your shell configuration. On Windows, add that directory to your user `Path` and open a new terminal.
 
 Linux/macOS: download the matching archive from https://github.com/SvetlovA/ralphex/releases and install `ralphex` on your `PATH`. Linux DEB and RPM packages are also provided.
 
@@ -45,7 +63,6 @@ ralphex --review docs/plans/feature.md  # optional plan file for context
 ralphex --external-only
 
 # codex executor mode (run task, review, finalize phases through codex; skip external review)
-# avoids the June 15, 2026 Anthropic billing split for Max-subscription users on an OpenAI plan
 ralphex --codex docs/plans/feature.md
 
 # codex executor mode with project CLAUDE.md passthrough (codex reads CLAUDE.md as AGENTS.md)
@@ -178,7 +195,7 @@ review_model = sonnet:low
 
 **Alternative providers for Claude phases:** `claude_command` and `claude_args` config options allow replacing Claude Code with any CLI that produces compatible stream-json output. Included wrappers: `scripts/codex-as-claude/codex-as-claude.sh`, `scripts/copilot-as-claude/copilot-as-claude.sh`, `scripts/gemini-as-claude/gemini-as-claude.sh`, `scripts/agy-as-claude/agy-as-claude.sh`, `scripts/opencode/opencode-as-claude.sh`, `scripts/pi-as-claude/pi-as-claude.sh`. Set `claude_command = /path/to/wrapper` in config, or use `--claude-command=/path/to/wrapper` for one run. Wrappers should ignore unknown flags gracefully. Use `--claude-args=` only when a wrapper cannot tolerate configured/default Claude flags and they must be cleared for a single run. See `docs/custom-providers.md` for details on writing wrappers for other tools (Gemini CLI, local LLMs, etc.).
 
-**Codex executor mode (`--codex`):** native codex alternative for running the full pipeline on codex. `--codex` routes task execution, both review phases, and finalize through the codex CLI; the external review phase is automatically skipped (codex-reviewing-codex is a same-model self-review with weak signal). Motivated by Anthropic's June 15, 2026 billing split between the Claude Max subscription and the Claude Agent SDK credit pool — users with an OpenAI plan can stay on their existing subscription.
+**Codex executor mode (`--codex`):** native codex alternative for running the full pipeline on codex. `--codex` routes task execution, both review phases, and finalize through the codex CLI; the external review phase is automatically skipped (codex-reviewing-codex is a same-model self-review with weak signal). Users who prefer Codex can run the entire pipeline through the Codex CLI.
 
 `--pass-claude-md` (valid with the codex executor: `--codex` or `executor = codex`) adds `-c project_doc_fallback_filenames=["CLAUDE.md"]` to the codex invocation so codex's native AGENTS.md walk picks up the project `./CLAUDE.md`. User-level `~/.claude/CLAUDE.md` is NOT auto-linked — ralphex never modifies `~/.codex/`. At first `--codex --pass-claude-md` run, if `~/.claude/CLAUDE.md` exists and `~/.codex/AGENTS.md` does not, ralphex prints a one-time hint suggesting `ln -s ~/.claude/CLAUDE.md ~/.codex/AGENTS.md`; the user opts in by running the command themselves.
 
