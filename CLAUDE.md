@@ -4,7 +4,7 @@ Autonomous plan execution with Claude Code - Go rewrite of ralph.py.
 
 ## LLM Documentation
 
-See @llms.txt for usage instructions and Claude Code integration commands.
+See @llms.txt for CLI usage instructions.
 
 ## Build Commands
 
@@ -28,8 +28,9 @@ go mod tidy && go mod vendor                           # tidy and re-vendor
 ## Project Structure
 
 ```
-cmd/ralphex/        # main entry point, CLI parsing
+cmd/ralphex.windows/        # main entry point, CLI parsing
 pkg/config/         # configuration loading, defaults, prompts, agents
+pkg/execx/          # platform-aware exec.Cmd creation (Windows .cmd/.bat wrapper)
 pkg/executor/       # claude and codex CLI execution
 pkg/git/            # git operations (external git CLI)
 pkg/input/          # terminal input collector (fzf/fallback, draft review)
@@ -73,17 +74,17 @@ docs/plans/         # plan files location
 - Progress logging to files
 - Progress file locking (flock) for active session detection
 - Watch-mode dashboard reactivates completed sessions on fsnotify Write events, resuming tailing from `Session.lastOffset` — recovery path for the flock race in `RefreshStates` that can prematurely mark a running session completed. `Session.Reactivate()` is idempotent and scoped to the written path; `loadProgressFileIntoSession` records `lastOffset` after the initial load so reactivation does not re-emit replayed events
-- Progress file fresh start: files ending in a `Completed:` footer are archived and then truncated on reuse; files ending in a `Failed:` footer (written by `Logger.SetFailed` before `Close`) or with no footer preserve content and write a `--- restarted at ... ---` separator, so retried failed/aborted runs keep history. `SetFailed` is called in `cmd/ralphex/main.go` for `r.Run` errors (including `ErrUserAborted`), dashboard start errors, and errors from `runWithWorktree`
+- Progress file fresh start: files ending in a `Completed:` footer are archived and then truncated on reuse; files ending in a `Failed:` footer (written by `Logger.SetFailed` before `Close`) or with no footer preserve content and write a `--- restarted at ... ---` separator, so retried failed/aborted runs keep history. `SetFailed` is called in `cmd/ralphex.windows/main.go` for `r.Run` errors (including `ErrUserAborted`), dashboard start errors, and errors from `runWithWorktree`
 - Completed-log archiving (#447): `archiveAndTruncateCompleted` (`pkg/progress/progress.go`) copies the completed log to `.ralphex/progress/history/<stem>/archive-<YYYYMMDD-HHMMSS>-<token>.txt` before truncating the canonical file, so a repeated `--review` no longer destroys the previous transcript. The copy is read from the still-locked fd through an `io.NewSectionReader`, written to a temp file and renamed into place; the canonical file is never renamed or reopened, so its flock keeps serializing concurrent runs on the same path. The timestamp comes from the archived run's own `Completed:` footer, not the archiving moment. The archive basename deliberately carries an `archive-` marker and **no** `progress-` prefix: `isProgressFile` (`pkg/web/watcher.go`) matches `progress-*.txt` and `DiscoverRecursive` walks the whole tree with `skipDirs` covering neither `.ralphex` nor `history`, so a prefixed archive would be discovered and replayed as a dashboard session of its own. `pruneProgressArchives` matches only `archiveNameRegex`, so foreign files and in-flight `.tmp` archives are never deleted. Order is archive → truncate → prune: pruning last means a truncate failure rolls back to exactly the starting state, where pruning first would delete the oldest archive to make room for one the rollback then withdraws. Retention is `maxProgressRuns` (10) total per canonical path — the live file plus 9 archives — and pruning is best effort: a removal failure warns through `Logger.Warn` after the header is written (so it lands in the new run's log) and lets the run continue, because every `NewLogger` caller treats an error as fatal and removing an open file fails on Windows. `removeProgressArchive` and `truncateProgressFile` are test seams for the failure paths
 - `--codex` is an executor switch (not a new pipeline mode): sets `cfg.Executor = config.ExecutorCodex` so task, both reviews, and finalize run through `CodexExecutor`(s) with `MultiAgent=true` (enables `features.multi_agent`, registers the `reviewer` agent for spawn_agent calls). Forces `cfg.ExternalReviewTool = "none"` (codex-reviewing-codex is weak-signal self-review). `--pass-claude-md` (codex executor only) sets `CodexExecutor.PassClaudeMd = true`. The `Mode` enum is unchanged; the `Executors` struct uses role-named fields (`Task`/`Review`/`External`/`Custom`), and `buildCodexExecutors` wires one codex instance into both `Task` and `Review` when the resolved review model/effort matches task, or two distinct instances when they differ. Review prompts are shared with claude — the `{{agent:<name>}}` expansion in `pkg/processor/prompts.go` reads `cfg.AppConfig.Executor` and emits `Use the Task tool` (claude) or `spawn_agent(agent='reviewer', task='...')` (codex). Codex config is passed as additive `-c` overrides per invocation by `(*CodexExecutor).configOverrides()` in `pkg/executor/codex.go`, layered on top of the user's `~/.codex/config.toml` so user customizations are preserved. ralphex never writes to `~/.codex/`; for user-level CLAUDE.md it prints a one-time hint to `ln -s ~/.claude/CLAUDE.md ~/.codex/AGENTS.md`
 - Shared reviewer contract: `reviewContextInstruction` (`pkg/processor/prompts.go`) is prepended by `formatAgentExpansion` to every `{{agent:<name>}}` body, for both executors and for local/global/embedded agent files alike. It supplies WHERE (the `git diff {{DEFAULT_BRANCH}}...HEAD` lead-in) plus five contract lines the agent body files do not carry: diff scope with a severity bar for pre-existing issues, read-only (the parent loop owns fixing), no sub-delegation, an evidence threshold, and the `NO ISSUES FOUND` sentinel. Go-side placement is deliberate and the non-overridability is the intended trade-off — a spawned agent's whole prompt is this lead-in plus its body, so a directive in `review_first.txt`/`review_second.txt` reaches only the root session and never the agent, and Go injection keeps the contract on users who replaced the embedded review prompts or wrote their own agents. Consequence to keep in mind: a custom agent written for a deliberately repo-wide sweep still gets the scope line, and the only escape is to drop `{{agent:<name>}}` and hard-code the invocation block inline (losing frontmatter model/agent-type support and the claude/codex shape switch). Reach is wider than the review phase — `expandAgentReferences` runs inside `replacePromptVariables`, so an `{{agent:}}` reference placed in `task.txt` or `finalize.txt` would carry the contract too; the embedded prompts reference agents only from `review_first.txt` and `review_second.txt`. The separate `Report findings only - no positive observations.` line is not part of the contract — it lives in `formatAgentExpansionClaude`/`formatAgentExpansionCodex`
 - Codex review-phase directives: `prependCodexReviewGuidance` (`pkg/processor/prompts.go`) injects a `=== Codex orchestration directives ===` block through `promptBuilder.FirstReviewPrompt` and `promptBuilder.SecondReviewPrompt` when `cfg.isCodexExecutor()` is true (no-op for claude). Covers two codex multi_agent quirks: (a) spawn_agent must pass only `agent` and `task` — `fork_context=true` with explicit `agent_type` is rejected by the codex API; (b) on a `wait_agent` timeout for a sub-agent that died mid-tool-call, re-spawn that agent ONCE then proceed with partial results. Section-level injection works for embedded and customized review prompts alike; `phase.ReviewPhase` consumes the final prompts.
 - Codex task-phase skill-conflict directive: `prependCodexTaskGuidance` (`pkg/processor/prompts.go`) injects the `=== Codex task-execution directives ===` block (`codexTaskGuidance`) through `promptBuilder.TaskPrompt` when `cfg.isCodexExecutor()` is true (no-op for claude). `phase.TaskPhase` consumes the final prompt. It tells codex that ralphex's task prompt is authoritative and a conflicting auto-activated skill from `~/.codex/skills/` must not be followed. Deliberately generic (names no specific skill); a soft prompt-level mitigation, not a hard guard — codex 0.133.0 has no per-invocation skill-disable flag. Task-phase only
 - Codex output streaming: codex has no `stream-json` equivalent, so assistant message text + tool dispatch land only in the session rollout file at `~/.codex/sessions/<y>/<m>/<d>/rollout-<ts>-<session-id>.jsonl`. `CodexExecutor.Run` extracts the session id from the stderr header banner (`extractSessionID` + buffered `sessionIDCh`) and spawns `tailRolloutFile` to follow it. `formatRolloutEvent` forwards two rollout record types: assistant message text (`formatAssistantMessage`) and reasoning-summary titles (`formatReasoningSummary`, `**`-stripped). `function_call` and `custom_tool_call_output` records are skipped as tool-machinery noise. Reasoning is taken from the rollout — NOT the live stderr reasoning stream — on purpose: codex 0.144+ echoes loaded skill/tool markdown verbatim onto stderr, and skill headers (`**Detect stale base:**`) are shape-identical to genuine reasoning titles, so no text-shape stderr filter can separate them; the rollout's typed `reasoning` records never carry that echo. `tailCtx` is canceled after stdout EOF so the tailer drains once more and exits
-- Codex stderr filtering: `shouldDisplay` (`pkg/executor/codex.go`) forwards ONLY codex's resolved `model:`/`sandbox:`/`reasoning effort:` header lines, and only on the executor's first `Run()` call (`headerEmitted atomic.Bool`), so users see what codex resolved from `~/.codex/config.toml`. Everything else on stderr is suppressed — per-iteration startup banner, exec output, hook lifecycle lines, and the reasoning stream (which comes from the rollout instead; see above). The ralphex-side banner (`printExecutorInfo`, `cmd/ralphex/main.go`) emits `sandbox:` (and `model:` / `reasoning effort:` when `codex_model` / `codex_reasoning_effort` are set; empty values skipped)
+- Codex stderr filtering: `shouldDisplay` (`pkg/executor/codex.go`) forwards ONLY codex's resolved `model:`/`sandbox:`/`reasoning effort:` header lines, and only on the executor's first `Run()` call (`headerEmitted atomic.Bool`), so users see what codex resolved from `~/.codex/config.toml`. Everything else on stderr is suppressed — per-iteration startup banner, exec output, hook lifecycle lines, and the reasoning stream (which comes from the rollout instead; see above). The ralphex-side banner (`printExecutorInfo`, `cmd/ralphex.windows/main.go`) emits `sandbox:` (and `model:` / `reasoning effort:` when `codex_model` / `codex_reasoning_effort` are set; empty values skipped)
 - Claude subagent progress: newer Claude Code streams Task-tool subagent activity as `system` events with subtype `task_started`/`task_progress` (no text block, so `extractText` drops them) — this is why a multi-agent review phase used to go silent for the whole agent run. `ClaudeExecutor.parseStream` (`pkg/executor/executor.go`) synthesizes a `  <description>` heartbeat line from those events via `subagentLine` and forwards it to `OutputHandler` only (not into `output`/`recentText`/`signal` or the `diagnostics` window). Only the description is shown — the subagent type and tool name are deliberately omitted: stock config runs every review agent as `general-purpose` so a `[general-purpose]` prefix would be pure noise (only user-customized agents with `agent:` frontmatter carry distinct types), and the description already names the action ("QA review of branch", "Running tests"). `task_started` (the agent's task title) is unthrottled; `task_progress` (per step) is throttled to one per `subagentProgressInterval` (10s) so parallel agents don't flood. Completion (`task_updated`/`task_notification`) is not surfaced — without an agent label a bare "done" is ambiguous across parallel agents. The model's own text is never throttled. `nowFn` (unexported, defaults to `time.Now`) makes the throttle window deterministically testable. Only Task-tool SUBAGENT activity is surfaced this way — a skill that runs INLINE in the main session (e.g. `/smells` on a small change) does its Read/Bash tool calls in the main session with no `task_*` events, so those stretches stay quiet by design
 - Debugging claude/codex executor streaming: to learn what the real upstream CLIs emit (stream-json shapes, stderr format, rollout records), run controlled experiments in a fresh agterm session — `agtermctl session new --wait --command "zsh -lc '<cli> ... > out 2> err'"` — and inspect the captured files. Nested `claude`/`codex` launched from the agent's OWN tool shell is blocked by the auto-mode classifier, so a separate agterm session is the only way to capture real streams. Useful captures: `claude --dangerously-skip-permissions --output-format=stream-json --verbose --print` (subagent `system/task_*` events, `parent_tool_use_id`); `codex exec --sandbox read-only` stderr (header banner, `**bold**` reasoning, `exec` output echo) plus its rollout file at `~/.codex/sessions/<y>/<m>/<d>/rollout-*-<session-id>.jsonl` (typed `reasoning` / `message` / `custom_tool_call_output` records — the clean source of truth). Gate this whole approach on `AGTERM_ENABLED` (only usable when running inside agterm)
-- `--plan-model`/`--task-model`/`--review-model` resolve per-phase model/effort. `plan_model` falls back to `task_model`; `review_model` falls back to `task_model`. Claude mode injects `--model`/`--effort` into `claude_command`. Codex mode: `ResolveCodexModelEffort` (`pkg/processor/executor_factory.go`) resolves the `model[:effort]` spec against `codex_model`/`codex_reasoning_effort` defaults; `buildCodexExecutors` builds a separate review `CodexExecutor` when review differs from task. `max` effort does not exist in codex — kept default, `maxDropped` reported, `codexModelBanner` / `codexPlanBanner` (`cmd/ralphex/main.go`) warns
+- `--plan-model`/`--task-model`/`--review-model` resolve per-phase model/effort. `plan_model` falls back to `task_model`; `review_model` falls back to `task_model`. Claude mode injects `--model`/`--effort` into `claude_command`. Codex mode: `ResolveCodexModelEffort` (`pkg/processor/executor_factory.go`) resolves the `model[:effort]` spec against `codex_model`/`codex_reasoning_effort` defaults; `buildCodexExecutors` builds a separate review `CodexExecutor` when review differs from task. `max` effort does not exist in codex — kept default, `maxDropped` reported, `codexModelBanner` / `codexPlanBanner` (`cmd/ralphex.windows/main.go`) warns
 
 ### Finalize Step
 
@@ -178,16 +179,16 @@ Key files:
 - Worktrees created at `.ralphex/worktrees/<branch-name>` inside main repo
 - Progress logger created before chdir so files land in main repo's `.ralphex/progress/`
 - The header records two plan paths: `Plan:` is the main-checkout path the run was launched with, `Worktree plan:` (worktree mode only) is the copy the run actually ticks, computed by `worktreePlanFile()` before the logger is built. `handleSessionPlan` (`pkg/web/server.go`) serves the worktree copy while it exists and falls back to `Plan:` once the worktree is removed, so a watch-mode dashboard shows live checkbox state instead of the untouched main copy (#440). Unknown header lines are ignored by `parseHeaderField`, so older readers are unaffected. Not fixed by this: the main-checkout copy stays unticked at its original path, so once the worktree is gone the panel falls back to it and a finished worktree run's plan panel reads 0 done
-- The plan archive runs on the feature branch, never in the main checkout (#450). `archivePlan` (`cmd/ralphex/main.go`) always uses `req.GitSvc`/`req.PlanFile`, which in worktree mode are the worktree's service and the ticked copy, so `move completed plan: ...` lands beside the task commits and reaches the PR. Archiving in the main checkout instead put the commit on whatever branch that checkout sat on — unpushable under branch protection, and for an untracked plan it *added* an unticked `completed/` file there that merged cleanly alongside the branch's ticked original, leaving two copies and no real archive. The user's main-checkout copy is deliberately left in place: it is their file, often untracked, and deleting it is not ralphex's call — so the completion summary annotates the archived path with the branch it was committed on (`displayMeta`'s `planNote`), since the path alone stops resolving the moment the worktree is removed. Ordering matters and is not what it first looks like: `DiffStats` runs *before* the archive and `sendNotification` after it. Taking the stats afterwards double-counts the plan under `diff.renames=false`, because the archived copy differs from the base copy by every ticked checkbox and so falls below git's rename-similarity threshold — measured, `-M` does not rescue it and only an implausibly low `-M1%` does. Before the archive the ticked plan is counted exactly once at its source path, which is the same content delta
+- The plan archive runs on the feature branch, never in the main checkout (#450). `archivePlan` (`cmd/ralphex.windows/main.go`) always uses `req.GitSvc`/`req.PlanFile`, which in worktree mode are the worktree's service and the ticked copy, so `move completed plan: ...` lands beside the task commits and reaches the PR. Archiving in the main checkout instead put the commit on whatever branch that checkout sat on — unpushable under branch protection, and for an untracked plan it *added* an unticked `completed/` file there that merged cleanly alongside the branch's ticked original, leaving two copies and no real archive. The user's main-checkout copy is deliberately left in place: it is their file, often untracked, and deleting it is not ralphex's call — so the completion summary annotates the archived path with the branch it was committed on (`displayMeta`'s `planNote`), since the path alone stops resolving the moment the worktree is removed. Ordering matters and is not what it first looks like: `DiffStats` runs *before* the archive and `sendNotification` after it. Taking the stats afterwards double-counts the plan under `diff.renames=false`, because the archived copy differs from the base copy by every ticked checkbox and so falls below git's rename-similarity threshold — measured, `-M` does not rescue it and only an implausibly low `-M1%` does. Before the archive the ticked plan is counted exactly once at its source path, which is the same content delta
 - A failed archive keeps the worktree instead of removing it. `archivePlan` sets `req.WtPreserve` (an `atomic.Bool`, read from the interrupt watcher's goroutine) and `cleanupWorktree` then restores CWD but skips `RemoveWorktree`; the closure installed in `WtCleanup` is the same one, so the 5-second force-exit path cannot delete it either. Without this, `git worktree remove --force` would discard the staged rename a rejected commit leaves behind (#439) — the ticked plan is already committed on the branch, so what is lost is the archive operation itself, not the plan. The run still exits green: archiving is best effort, and the success notification is sent after the failed attempt. The summary names the retained worktree and says `git -C <root> status`, because a bare `git status` after the chdir back inspects the main checkout
 - Worktree auto-removed on completion, failure, or SIGINT; branch preserved for PR. The one exception is a failed plan archive, which retains it (see above)
 - Source-checkout cleanliness is enforced only in in-place branch mode. `preparePlanBranch`'s `worktreeMode` flag splits the two: ordinary dirty files are a hard error when the feature branch uses the same checkout, but worktree mode lists them in a warning and does not copy them (#444). An uncommitted selected plan is the exception and is copied by `copyToWorktree`. A new feature branch starts at the current `HEAD`; an existing feature branch keeps its own tip. Local `.ralphex` configuration is loaded before worktree creation and still applies. Unfinished Git operations are a hard error in worktree mode; `externalBackend.operationInProgress` detects merge, cherry-pick, revert, rebase, am, and bisect state through `git rev-parse --git-path`. The guard is a conservative source-state boundary: a worktree forks committed HEAD and carries none of the unfinished operation's index or staged state, so the source checkout is an unsound base to fork from. Its original rationale was that completion archived the plan in that checkout, which #450 changed — the archive now commits in the worktree — so the reason was rewritten rather than the guard relaxed. Reusing an existing feature branch mid-operation may in fact work; whether to narrow the guard is a #445 policy decision with its own blast radius, deliberately not taken in #450
 - Only active for `ModeFull` and `ModeTasksOnly` (review/plan/external modes skip worktree)
-- `runWithWorktree()` in `cmd/ralphex/main.go` encapsulates the full lifecycle
+- `runWithWorktree()` in `cmd/ralphex.windows/main.go` encapsulates the full lifecycle
 - Case-insensitive path handling: `CreateBranchForPlan()`, `CreateWorktreeForPlan()`, and `CommitPlanFile()` resolve plan file paths to actual on-disk case via `resolveFilesystemCase()` to handle macOS APFS case-insensitive filesystems. `hasChangesOtherThan()` uses case-insensitive comparison for plan file exclusion
 
 Key files:
-- `cmd/ralphex/main.go` - `runWithWorktree()`, `selectAndExecutePlan()`, interrupt cleanup
+- `cmd/ralphex.windows/main.go` - `runWithWorktree()`, `selectAndExecutePlan()`, interrupt cleanup
 - `pkg/git/service.go` - `CreateWorktreeForPlan()`, `CommitPlanFile()`, `RemoveWorktree()`, `resolveFilesystemCase()`
 - `pkg/git/external.go` - `addWorktree()`, `removeWorktree()`, `pruneWorktrees()` (unexported backend methods)
 
@@ -222,15 +223,29 @@ Key files:
 
 ## Platform Support
 
-- **Linux/macOS:** supported
-- **Windows:** best effort. It builds and runs, releases carry no Windows binary, and the maintainer
-  has no Windows machine, so a Windows-only report cannot be reproduced and a Windows-only fix
-  cannot be verified. Such an issue or PR is merged only when the cause is clear-cut, the change is
-  small and self-contained, and it cannot affect Linux or macOS; otherwise it is closed. Known gaps:
-  - Process group signals not available (graceful shutdown kills direct process only, not child processes)
+- **Linux/macOS/Windows:** supported, with amd64 and arm64 release binaries.
+- **Windows platform details:**
+  - Descendant cleanup uses a Job Object, not process groups. `newProcessGroupCleanup`
+    (`pkg/executor/procgroup_windows.go`) creates an anonymous job with
+    `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` and assigns the started process to it, so descendants
+    join automatically and one `TerminateJobObject` reaches the whole tree. This matters more on
+    Windows than the Unix pgid kill does: an npm-installed CLI always sits behind a `cmd.exe`
+    shim (`claude.cmd` -> `cmd.exe` -> `node.exe`, plus another `cmd /C` layer from `execx` for an
+    explicit batch path), so killing `cmd.Process` reaches the shim and nothing below it, and
+    Windows never reparents orphans. `killProcess` is two-stage like the Unix SIGTERM/SIGKILL
+    pair - kill the direct child to break the tree's stdio pipes, wait `gracefulShutdownDelay`,
+    then terminate the job - because Windows has no signal that asks a process to shut down.
+    `Wait` reaps through `terminateJob` directly (no grace stage: the direct child has already
+    exited, so the delay would be paid on every iteration for nothing), mirroring the Unix
+    post-exit orphan reap; skipping it was what let stale `find`/`grep`/`head`/MCP processes
+    accumulate across a run. `CREATE_NEW_PROCESS_GROUP` is deliberately NOT set, since it would
+    suppress the console `CTRL_C_EVENT` broadcast that already tears the tree down on interactive
+    Ctrl+C. Job setup failure is logged and degrades to direct-process kill, never fails the run
+  - File locking implemented via `LockFileEx` on a sentinel byte at offset 2^63-1 (full-range locks would block the Tailer, since Windows file locks are mandatory)
   - File locking not available (active session detection disabled)
   - Ctrl+\ manual break not available
   - Prompts are passed to the claude CLI via stdin (not `-p` flag) to avoid the cmd.exe 8191-character command-line limit
+  - `.cmd`/`.bat` wrapper: a command configured as an explicit batch path (e.g. `claude_command = C:\...\claude.cmd`) is invoked through `cmd /C` by `execx.Command`/`execx.CommandContext` (`pkg/execx`), which mirror `exec.Command`/`exec.CommandContext`. A bare name such as `claude` is left alone — `exec.LookPath` resolves it through `PATHEXT` and `os/exec` runs the resulting shim directly. An unresolvable name is also left alone, so `Start` reports `exec.ErrNotFound` rather than a cmd.exe exit code
 
 ### Cross-Platform Development
 
@@ -239,6 +254,7 @@ When adding platform-specific code (syscalls, signals, file locking):
 2. Create separate files: `foo_unix.go` and `foo_windows.go`
 3. Keep common code in the main file, extract platform-specific functions
 4. Windows stubs can be no-ops where functionality is optional
+5. When platform-specific behavior needs only `runtime.GOOS` (no platform-specific imports), use a single file instead of build-tag pairs. See `pkg/execx/execx.go` for an example
 
 Example files:
 - `pkg/executor/procgroup_unix.go` / `procgroup_windows.go` - process group management
@@ -369,8 +385,6 @@ Variables are also expanded inside agent content, so custom agents can use `{{DE
 - Run `ralphex --init` to create local `.ralphex/` project config with commented-out defaults
 - Run `ralphex --reset` to interactively restore defaults, or delete ALL `.txt` files manually
 - Run `ralphex --dump-defaults <dir>` to extract raw embedded defaults for comparison or merging
-- Use `/ralphex-update` skill for smart merging of updated defaults into customized configs
-- Use `/ralphex-adopt` skill to convert plans from other formats (OpenSpec, spec-kit, GitHub/GitLab issues, task-lists, free-form markdown) into ralphex format
 - Alternatively, reference agents installed in your Claude Code directly in prompt files (like `qa-expert`, `go-smells-expert`)
 
 ## Testing
@@ -435,7 +449,7 @@ echo "// comment" >> main.go
 git add -A && git commit -m "add comment"
 
 # run review-only (no plan needed)
-go run <ralphex-project-root>/cmd/ralphex --review
+go run <ralphex-project-root>/cmd/ralphex.windows --review
 ```
 
 ### Test Codex-Only Mode
@@ -444,7 +458,7 @@ go run <ralphex-project-root>/cmd/ralphex --review
 cd /tmp/ralphex-test
 
 # run codex-only review
-go run <ralphex-project-root>/cmd/ralphex --codex-only
+go run <ralphex-project-root>/cmd/ralphex.windows --codex-only
 ```
 
 ### Monitor Progress
@@ -510,7 +524,6 @@ If you're an AI agent preparing a contribution, complete this checklist:
 - Template overrides: `site/overrides/` with `custom_dir: overrides` in mkdocs.yml
 - **Python version**: Zensical requires Python ≥ 3.10. Local builds use a venv at `site/.venv/` (auto-created by `make prep_site`); Cloudflare Pages requires `PYTHON_VERSION` env var ≥ 3.10
 - **Brand color**: dark-mode palette uses Material's `teal` keyword, then `site/docs/stylesheets/extra.css` overrides `--md-primary-fg-color` / `--md-accent-fg-color` to `#2dd4bf` (Tailwind teal-400) so the docs match the landing page brand color
-- **Raw .md files**: SSG renders ALL `.md` files in `docs_dir` as HTML pages. To serve raw markdown (e.g., `assets/claude/*.md` for Claude Code skills), copy them AFTER `zensical build` - see `prep_site` target in Makefile
 
 ## Testing Safety Rules
 
@@ -521,7 +534,6 @@ If you're an AI agent preparing a contribution, complete this checklist:
 
 ## Workflow Rules
 
-- **Plugin version**: bump `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` versions on release if skill files (`assets/claude/`) changed since last plugin version bump
 - **CHANGELOG**: Never modify during development - updates are part of release process only
 - **Version sections**: Never add entries to existing version sections - versions are immutable once released
 - **Linter warnings**: Add exclusions to `.golangci.yml` instead of `_, _ =` prefixes for fmt.Fprintf/Fprintln

@@ -1,12 +1,8 @@
 version: 2
 
-before:
-  hooks:
-    - ./scripts/internal/update-plugin-version.sh {{ .Tag }}
-
 builds:
   - id: ralphex
-    main: ./cmd/ralphex
+    main: ./cmd/ralphex.windows
     binary: ralphex
     env:
       - CGO_ENABLED=0
@@ -17,25 +13,46 @@ builds:
       - amd64
       - arm64
     ldflags:
-      - -s -w -X main.revision={{.Tag}}-{{.ShortCommit}}-{{ trimsuffix (replace (replace .CommitDate "-" "") ":" "") "Z" }}
+      - -s -w -X main.revision={{.Tag}}
+  - id: ralphex-windows
+    main: ./cmd/ralphex.windows
+    binary: ralphex.windows
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.revision={{.Tag}}
 
 archives:
   - id: ralphex
-    builds:
+    ids:
       - ralphex
     name_template: >-
       {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    formats:
+      - tar.gz
     files:
       - completions/*
+  - id: ralphex-windows
+    ids:
+      - ralphex-windows
+    name_template: >-
+      ralphex_windows_{{ .Version }}_{{ .Arch }}
+    formats:
+      - zip
 
 nfpms:
   - id: ralphex
     package_name: ralphex
-    builds:
+    ids:
       - ralphex
-    vendor: umputun
-    homepage: https://github.com/umputun/ralphex
-    maintainer: umputun
+    vendor: svtlv
+    homepage: https://github.com/svtlv/ralphex
+    maintainer: svtlv
     description: Autonomous plan execution with Claude Code
     license: MIT
     formats:
@@ -49,15 +66,37 @@ nfpms:
       - src: completions/ralphex.fish
         dst: /usr/share/fish/vendor_completions.d/ralphex.fish
 
-brews:
-  - repository:
-      owner: umputun
-      name: homebrew-apps
-    directory: Formula
-    homepage: https://github.com/umputun/ralphex
+homebrew_casks:
+  - name: ralphex.windows
+    ids:
+      - ralphex
+    binaries:
+      - ralphex.windows
+    homepage: https://github.com/svtlv/ralphex
     description: Autonomous plan execution with Claude Code
-    license: MIT
-    extra_install: |
-      bash_completion.install "completions/ralphex.bash" => "ralphex"
-      zsh_completion.install "completions/ralphex.zsh" => "_ralphex"
-      fish_completion.install "completions/ralphex.fish" => "ralphex.fish"
+    completions:
+      bash: completions/ralphex.bash
+      zsh: completions/ralphex.zsh
+      fish: completions/ralphex.fish
+    custom_block: |
+      rename "ralphex", "ralphex.windows"
+      on_macos do
+        postflight_steps do
+          run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "ralphex.windows"], chdir: ".", writable_paths: ["ralphex.windows"]
+        end
+      end
+    repository:
+      owner: svtlv
+      name: ralphex
+      branch: homebrew-{{ .Version }}
+      pull_request:
+        enabled: true
+        base:
+          owner: svtlv
+          name: ralphex
+          branch: windows
+
+release:
+  prerelease: false
+  make_latest: true
+  name_template: "{{ .Version }}"

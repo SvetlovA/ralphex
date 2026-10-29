@@ -23,6 +23,8 @@ func setupExternalTestRepo(t *testing.T) string {
 	runGit(t, dir, "config", "user.email", "test@test.com")
 	runGit(t, dir, "config", "user.name", "test")
 	runGit(t, dir, "config", "commit.gpgsign", "false")
+	// pin line endings so a developer's global core.autocrlf cannot rewrite fixture content
+	runGit(t, dir, "config", "core.autocrlf", "false")
 
 	// create a file and commit
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "README.md"), []byte("# Test\n"), 0o600))
@@ -736,6 +738,8 @@ func TestExternalBackend_CreateInitialCommit(t *testing.T) {
 		runGit(t, dir, "config", "user.email", "test@test.com")
 		runGit(t, dir, "config", "user.name", "test")
 		runGit(t, dir, "config", "commit.gpgsign", "false")
+		// pin line endings so a developer's global core.autocrlf cannot rewrite fixture content
+		runGit(t, dir, "config", "core.autocrlf", "false")
 
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "README.md"), []byte("# Test\n"), 0o600))
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main\n"), 0o600))
@@ -757,6 +761,8 @@ func TestExternalBackend_CreateInitialCommit(t *testing.T) {
 		runGit(t, dir, "config", "user.email", "test@test.com")
 		runGit(t, dir, "config", "user.name", "test")
 		runGit(t, dir, "config", "commit.gpgsign", "false")
+		// pin line endings so a developer's global core.autocrlf cannot rewrite fixture content
+		runGit(t, dir, "config", "core.autocrlf", "false")
 
 		eb, err := newExternalBackend(dir, "git")
 		require.NoError(t, err)
@@ -772,6 +778,8 @@ func TestExternalBackend_CreateInitialCommit(t *testing.T) {
 		runGit(t, dir, "config", "user.email", "test@test.com")
 		runGit(t, dir, "config", "user.name", "test")
 		runGit(t, dir, "config", "commit.gpgsign", "false")
+		// pin line endings so a developer's global core.autocrlf cannot rewrite fixture content
+		runGit(t, dir, "config", "core.autocrlf", "false")
 
 		require.NoError(t, os.WriteFile(filepath.Join(dir, ".gitignore"), []byte("*.log\n"), 0o600))
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "README.md"), []byte("# Test\n"), 0o600))
@@ -876,7 +884,7 @@ func TestExternalBackend_toRelative(t *testing.T) {
 	t.Run("returns repo-relative path unchanged", func(t *testing.T) {
 		rel, err := eb.toRelative("docs/plans/test.md")
 		require.NoError(t, err)
-		assert.Equal(t, "docs/plans/test.md", rel)
+		assert.Equal(t, "docs/plans/test.md", rel, "an already-relative slash path passes through untouched")
 	})
 
 	t.Run("converts os-specific separators to forward slashes", func(t *testing.T) {

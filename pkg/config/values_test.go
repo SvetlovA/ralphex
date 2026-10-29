@@ -999,6 +999,7 @@ plans_dir = custom/plans
 }
 
 func TestValuesLoader_parseValuesFromFile_PermissionDenied(t *testing.T) {
+	skipIfNoChmod(t)
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config")
 	require.NoError(t, os.WriteFile(configPath, []byte("claude_command = test"), 0o600))
