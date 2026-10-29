@@ -1,6 +1,6 @@
 # Fork Release Guide
 
-The `windows` branch is the default development and release branch for `SvetlovA/ralphex`. The `master` branch is reserved for synchronizing the fork with `umputun/ralphex`.
+The `windows` branch is the default development and release branch for `svtlv/ralphex`. The `master` branch is reserved for synchronizing the fork with `umputun/ralphex`.
 
 ## Versioning
 
@@ -34,7 +34,7 @@ The workflows use GitHub's automatic `GITHUB_TOKEN` for these operations:
 
 - creating GitHub releases and uploading Linux, macOS, and Windows artifacts;
 - opening a PR to update `Casks/ralphex.windows.rb` in this repository after each release;
-- publishing the `svetlova/ralphex` and `svetlova/ralphex-go` container packages to GHCR;
+- publishing the `svtlv/ralphex` and `svetlova/ralphex-go` container packages to GHCR;
 - submitting CI coverage data.
 
 Do not create `GORELEASER_GITHUB_TOKEN` or `PKG_TOKEN`; the fork workflows do not consume them.
@@ -54,7 +54,7 @@ git tag -a v1.7.0-windows.1 -m "Windows 1.7.0-windows.1"
 git push origin v1.7.0-windows.1
 ```
 
-The tag starts the release workflow. GoReleaser creates the release in `SvetlovA/ralphex` with `amd64` and `arm64` artifacts for each platform:
+The tag starts the release workflow. GoReleaser creates the release in `svtlv/ralphex` with `amd64` and `arm64` artifacts for each platform:
 
 - Linux and macOS: `.tar.gz` archives containing `ralphex` and shell completions.
 - Linux: DEB and RPM packages.
@@ -63,7 +63,7 @@ The tag starts the release workflow. GoReleaser creates the release in `SvetlovA
 After the release succeeds, merge its Homebrew cask update PR. Users can then install with:
 
 ```bash
-brew tap SvetlovA/ralphex https://github.com/SvetlovA/ralphex.git
+brew tap svtlv/ralphex https://github.com/svtlv/ralphex.git
 brew install --cask ralphex.windows
 ```
 

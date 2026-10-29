@@ -3,14 +3,14 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/SvetlovA/ralphex/actions/workflows/ci.yml"><img src="https://github.com/SvetlovA/ralphex/actions/workflows/ci.yml/badge.svg" alt="build"></a>
-  <a href="https://coveralls.io/github/SvetlovA/ralphex?branch=windows"><img src="https://coveralls.io/repos/github/SvetlovA/ralphex/badge.svg?branch=windows" alt="Coverage Status"></a>
-  <a href="https://goreportcard.com/report/github.com/SvetlovA/ralphex"><img src="https://goreportcard.com/badge/github.com/SvetlovA/ralphex?v=2" alt="Go Report Card"></a>
+  <a href="https://github.com/svtlv/ralphex/actions/workflows/ci.yml"><img src="https://github.com/svtlv/ralphex/actions/workflows/ci.yml/badge.svg" alt="build"></a>
+  <a href="https://coveralls.io/github/svtlv/ralphex?branch=windows"><img src="https://coveralls.io/repos/github/svtlv/ralphex/badge.svg?branch=windows" alt="Coverage Status"></a>
+  <a href="https://goreportcard.com/report/github.com/svtlv/ralphex"><img src="https://goreportcard.com/badge/github.com/svtlv/ralphex?v=2" alt="Go Report Card"></a>
 </p>
 
 <h2 align="center">Autonomous plan execution with Claude Code and codex</h2>
 
-> This cross-platform fork is maintained by [Artem Svetlov](https://github.com/SvetlovA). It is based on [Umputun's original ralphex project](https://github.com/umputun/ralphex), which made this work possible. Thank you, Umputun, for creating and sharing it.
+> This cross-platform fork is maintained by [Artem Svetlov](https://github.com/svtlv). It is based on [Umputun's original ralphex project](https://github.com/umputun/ralphex), which made this work possible. Thank you, Umputun, for creating and sharing it.
 >
 > Development and releases use the `windows` branch. The `master` branch is preserved for synchronizing changes from the upstream repository.
 
@@ -116,7 +116,7 @@ Launches 5 review agents **in parallel** via Claude Code Task tool:
 
 Claude verifies findings, fixes confirmed issues, and commits.
 
-*[Default agents](https://github.com/SvetlovA/ralphex/tree/windows/pkg/config/defaults/agents) provide common, language-agnostic review steps. They can be customized and tuned for your specific needs, languages, and workflows. See [Customization](#customization) for details.*
+*[Default agents](https://github.com/svtlv/ralphex/tree/windows/pkg/config/defaults/agents) provide common, language-agnostic review steps. They can be customized and tuned for your specific needs, languages, and workflows. See [Customization](#customization) for details.*
 
 ### Phase 3: External Review (optional)
 
@@ -320,7 +320,7 @@ After plan creation, you can choose to continue with immediate execution or exit
 This fork's Homebrew package is named `ralphex.windows`. Tap the repository and install the release for Apple Silicon or Intel Macs:
 
 ```bash
-brew tap SvetlovA/ralphex https://github.com/SvetlovA/ralphex.git
+brew tap svtlv/ralphex https://github.com/svtlv/ralphex.git
 brew install --cask ralphex.windows
 ralphex.windows --version
 ```
@@ -345,7 +345,7 @@ ralphex.windows --version
 Install the latest published release for `amd64` or `arm64`, without Go or root access:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/SvetlovA/ralphex/windows/scripts/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/svtlv/ralphex/windows/scripts/install.sh | sh
 ```
 
 The installer verifies the archive's SHA-256 checksum and installs `ralphex` into `~/.local/bin`. Add that directory to your shell configuration (`~/.zshrc` for Zsh or `~/.bashrc` for Bash), then open a new terminal:
@@ -358,13 +358,13 @@ ralphex --version
 Run the installer again to update. To pin a release or choose another installation directory:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/SvetlovA/ralphex/windows/scripts/install.sh \
+curl -fsSL https://raw.githubusercontent.com/svtlv/ralphex/windows/scripts/install.sh \
   | RALPHEX_VERSION=v1.7.0-windows.2 RALPHEX_INSTALL_DIR="$HOME/.local/bin" sh
 ```
 
 ### Linux packages
 
-Download the `.deb` or `.rpm` matching your architecture (`amd64` or `arm64`) from [this fork's releases](https://github.com/SvetlovA/ralphex/releases), then install it with your package manager:
+Download the `.deb` or `.rpm` matching your architecture (`amd64` or `arm64`) from [this fork's releases](https://github.com/svtlv/ralphex/releases), then install it with your package manager:
 
 ```bash
 # Debian / Ubuntu (replace the filename with the downloaded package)
@@ -400,14 +400,14 @@ On Windows, add the Go bin directory to your user `Path` and open a new terminal
 
 ### Manual Linux and macOS installation
 
-Download the archive for your OS and architecture from [this fork's releases](https://github.com/SvetlovA/ralphex/releases), extract `ralphex`, and place it in a directory on your `PATH`. Linux releases also include DEB and RPM packages. Archives include shell completions.
+Download the archive for your OS and architecture from [this fork's releases](https://github.com/svtlv/ralphex/releases), extract `ralphex`, and place it in a directory on your `PATH`. Linux releases also include DEB and RPM packages. Archives include shell completions.
 
 ### Windows installer
 
 Run this in PowerShell:
 
 ```powershell
-irm https://raw.githubusercontent.com/SvetlovA/ralphex/windows/scripts/install-windows.ps1 | iex
+irm https://raw.githubusercontent.com/svtlv/ralphex/windows/scripts/install-windows.ps1 | iex
 ```
 
 The installer downloads the latest Windows release from this repository, installs only `ralphex.windows.exe` under `%LOCALAPPDATA%\Programs\ralphex`, and adds that directory to your user `PATH`. Use `ralphex.windows.exe` in place of `ralphex` in the examples to run this fork alongside another `ralphex.exe`. Open a new terminal, then verify the installation:
@@ -420,7 +420,7 @@ If you used an older installer, its `ralphex.exe` copy remains in the installati
 
 ### Manual Windows installation
 
-Download the archive for your architecture from [this fork's releases](https://github.com/SvetlovA/ralphex/releases), extract `ralphex.windows.exe`, and place it in a directory on your `PATH`.
+Download the archive for your architecture from [this fork's releases](https://github.com/svtlv/ralphex/releases), extract `ralphex.windows.exe`, and place it in a directory on your `PATH`.
 
 Release tags use `v<upstream-version>-windows.<increment>`. For example, `v1.7.0-windows.1` is the first fork release based on upstream `v1.7.0`. The `windows` suffix identifies the fork; releases include Linux, macOS, and Windows. Increment the final number for fork-only releases and reset it to `1` after adopting a newer upstream version.
 
@@ -431,7 +431,7 @@ See [Release setup](docs/windows-release.md) for the release procedure and repos
 Download the wrapper script and install to PATH:
 
 ```bash
-curl -sL https://raw.githubusercontent.com/SvetlovA/ralphex/windows/scripts/ralphex-dk.sh -o /usr/local/bin/ralphex
+curl -sL https://raw.githubusercontent.com/svtlv/ralphex/windows/scripts/ralphex-dk.sh -o /usr/local/bin/ralphex
 chmod +x /usr/local/bin/ralphex
 ```
 
@@ -1165,7 +1165,7 @@ notify_webhook_urls = https://hooks.example.com/notify
 
 Supported channels: `telegram`, `email`, `slack`, `webhook`, `custom` (script). Misconfigured channels are detected at startup.
 
-See [notifications documentation](https://github.com/SvetlovA/ralphex/blob/windows/docs/notifications.md) for setup guides, message format examples, and custom script integration.
+See [notifications documentation](https://github.com/svtlv/ralphex/blob/windows/docs/notifications.md) for setup guides, message format examples, and custom script integration.
 
 **Prompt customization:**
 
@@ -1192,12 +1192,12 @@ The `claude_command` and `claude_args` config options let you replace Claude Cod
 
 Working examples are included:
 
-- [`scripts/codex-as-claude/codex-as-claude.sh`](https://github.com/SvetlovA/ralphex/blob/windows/scripts/codex-as-claude/codex-as-claude.sh) wraps codex to produce Claude-compatible events
-- [`scripts/copilot-as-claude/copilot-as-claude.sh`](https://github.com/SvetlovA/ralphex/blob/windows/scripts/copilot-as-claude/copilot-as-claude.sh) wraps GitHub Copilot CLI and translates its native JSONL stream into Claude-compatible events
-- [`scripts/gemini-as-claude/gemini-as-claude.sh`](https://github.com/SvetlovA/ralphex/blob/windows/scripts/gemini-as-claude/gemini-as-claude.sh) wraps Gemini CLI for the implementation slot
-- [`scripts/agy-as-claude/agy-as-claude.sh`](https://github.com/SvetlovA/ralphex/blob/windows/scripts/agy-as-claude/agy-as-claude.sh) wraps the Antigravity (`agy`) CLI — Google's successor to Gemini CLI — for the implementation slot
-- [`scripts/opencode/opencode-as-claude.sh`](https://github.com/SvetlovA/ralphex/blob/windows/scripts/opencode/opencode-as-claude.sh) wraps OpenCode CLI for the implementation slot, and `scripts/opencode/opencode-review.sh` is shipped alongside as a turn-key custom review script
-- [`scripts/pi-as-claude/pi-as-claude.sh`](https://github.com/SvetlovA/ralphex/blob/windows/scripts/pi-as-claude/pi-as-claude.sh) wraps the pi CLI, translating its `--mode json` JSONL events into Claude-compatible events
+- [`scripts/codex-as-claude/codex-as-claude.sh`](https://github.com/svtlv/ralphex/blob/windows/scripts/codex-as-claude/codex-as-claude.sh) wraps codex to produce Claude-compatible events
+- [`scripts/copilot-as-claude/copilot-as-claude.sh`](https://github.com/svtlv/ralphex/blob/windows/scripts/copilot-as-claude/copilot-as-claude.sh) wraps GitHub Copilot CLI and translates its native JSONL stream into Claude-compatible events
+- [`scripts/gemini-as-claude/gemini-as-claude.sh`](https://github.com/svtlv/ralphex/blob/windows/scripts/gemini-as-claude/gemini-as-claude.sh) wraps Gemini CLI for the implementation slot
+- [`scripts/agy-as-claude/agy-as-claude.sh`](https://github.com/svtlv/ralphex/blob/windows/scripts/agy-as-claude/agy-as-claude.sh) wraps the Antigravity (`agy`) CLI — Google's successor to Gemini CLI — for the implementation slot
+- [`scripts/opencode/opencode-as-claude.sh`](https://github.com/svtlv/ralphex/blob/windows/scripts/opencode/opencode-as-claude.sh) wraps OpenCode CLI for the implementation slot, and `scripts/opencode/opencode-review.sh` is shipped alongside as a turn-key custom review script
+- [`scripts/pi-as-claude/pi-as-claude.sh`](https://github.com/svtlv/ralphex/blob/windows/scripts/pi-as-claude/pi-as-claude.sh) wraps the pi CLI, translating its `--mode json` JSONL events into Claude-compatible events
 
 To use the included Copilot wrapper:
 
@@ -1236,7 +1236,7 @@ Provider-specific environment variables:
 - `PI_VERBOSE` - set to `1` to include tool execution events in the stream (default: `0`, only assistant text is shown)
 - `PI_EXTRA_ARGS` - extra flags appended verbatim to the pi invocation (word-split on whitespace); e.g. `--nolo-mode full` to auto-approve tools in non-interactive runs
 
-See [custom providers documentation](https://github.com/SvetlovA/ralphex/blob/windows/docs/custom-providers.md) for a detailed guide on writing wrappers for other providers.
+See [custom providers documentation](https://github.com/svtlv/ralphex/blob/windows/docs/custom-providers.md) for a detailed guide on writing wrappers for other providers.
 
 ### Swapping Implementation and Review Roles
 
@@ -1251,7 +1251,7 @@ custom_review_script = /path/to/scripts/opencode/opencode-review.sh
 
 The `claude_command` slot is documented above. The `custom_review_script` slot, including the script interface and expected output format, is documented in [Custom External Review](#custom-external-review).
 
-The repository ships a working custom review script at [`scripts/opencode/opencode-review.sh`](https://github.com/SvetlovA/ralphex/blob/windows/scripts/opencode/opencode-review.sh) that uses OpenCode CLI to produce review findings. Use it directly, or read it as a template when writing your own (for example, a `claude-as-review.sh` that calls Claude in the review slot).
+The repository ships a working custom review script at [`scripts/opencode/opencode-review.sh`](https://github.com/svtlv/ralphex/blob/windows/scripts/opencode/opencode-review.sh) that uses OpenCode CLI to produce review findings. Use it directly, or read it as a template when writing your own (for example, a `claude-as-review.sh` that calls Claude in the review slot).
 
 The wrappers under `scripts/codex-as-claude/`, `scripts/copilot-as-claude/`, `scripts/gemini-as-claude/`, `scripts/agy-as-claude/`, `scripts/opencode/`, and `scripts/pi-as-claude/` ship in the source tree but are not bundled with the binary. Vendor the one you need into your project (`.ralphex/scripts/`) or reference it from a checkout.
 
@@ -1268,9 +1268,9 @@ ralphex can work with Mercurial repositories through the `vcs_command` config op
 vcs_command = ~/.config/ralphex/scripts/hg2git.sh
 ```
 
-A reference translation script is included at [`scripts/hg2git/hg2git.sh`](https://github.com/SvetlovA/ralphex/blob/windows/scripts/hg2git/hg2git.sh). It maps the ~15 git subcommands ralphex uses internally to Mercurial equivalents, with phase-based commit logic (amend on draft, commit on public). Requires bash 4.0+ (for associative arrays used in diff stats parsing).
+A reference translation script is included at [`scripts/hg2git/hg2git.sh`](https://github.com/svtlv/ralphex/blob/windows/scripts/hg2git/hg2git.sh). It maps the ~15 git subcommands ralphex uses internally to Mercurial equivalents, with phase-based commit logic (amend on draft, commit on public). Requires bash 4.0+ (for associative arrays used in diff stats parsing).
 
-You will also need to customise prompt files to replace git commands that Claude executes as bash commands during reviews. See [Mercurial support documentation](https://github.com/SvetlovA/ralphex/blob/windows/docs/hg-support.md) for full setup instructions, prompt replacement examples, `.hgignore` setup, and known limitations.
+You will also need to customise prompt files to replace git commands that Claude executes as bash commands during reviews. See [Mercurial support documentation](https://github.com/svtlv/ralphex/blob/windows/docs/hg-support.md) for full setup instructions, prompt replacement examples, `.hgignore` setup, and known limitations.
 
 <details markdown>
 <summary><b>FAQ</b></summary>
@@ -1409,7 +1409,7 @@ Codex works the same way through its wrapper:
 claude_command = /path/to/scripts/codex-as-claude/codex-as-claude.sh
 ```
 
-Set `CODEX_MODEL` env var to choose the model. See [Using Alternative Providers](#using-alternative-providers-for-claude-phases) and [custom providers documentation](https://github.com/SvetlovA/ralphex/blob/windows/docs/custom-providers.md) for the included Copilot example and for writing wrappers for other tools.
+Set `CODEX_MODEL` env var to choose the model. See [Using Alternative Providers](#using-alternative-providers-for-claude-phases) and [custom providers documentation](https://github.com/svtlv/ralphex/blob/windows/docs/custom-providers.md) for the included Copilot example and for writing wrappers for other tools.
 
 **How do I use multiple Claude accounts?**
 

@@ -50,9 +50,9 @@ nfpms:
     package_name: ralphex
     ids:
       - ralphex
-    vendor: SvetlovA
-    homepage: https://github.com/SvetlovA/ralphex
-    maintainer: SvetlovA
+    vendor: svtlv
+    homepage: https://github.com/svtlv/ralphex
+    maintainer: svtlv
     description: Autonomous plan execution with Claude Code
     license: MIT
     formats:
@@ -72,7 +72,7 @@ homebrew_casks:
       - ralphex
     binaries:
       - ralphex.windows
-    homepage: https://github.com/SvetlovA/ralphex
+    homepage: https://github.com/svtlv/ralphex
     description: Autonomous plan execution with Claude Code
     completions:
       bash: completions/ralphex.bash
@@ -86,13 +86,13 @@ homebrew_casks:
         end
       end
     repository:
-      owner: SvetlovA
+      owner: svtlv
       name: ralphex
       branch: homebrew-{{ .Version }}
       pull_request:
         enabled: true
         base:
-          owner: SvetlovA
+          owner: svtlv
           name: ralphex
           branch: windows
 

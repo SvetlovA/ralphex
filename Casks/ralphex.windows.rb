@@ -13,27 +13,27 @@ cask "ralphex.windows" do
   on_macos do
     on_arm do
       sha256 "dcaed903b37cc92be06ea84772cfa9e419d7e9ad9664632387e64264cd562a8a"
-      url "https://github.com/SvetlovA/ralphex/releases/download/v#{version}/ralphex_#{version}_darwin_arm64.tar.gz"
+      url "https://github.com/svtlv/ralphex/releases/download/v#{version}/ralphex_#{version}_darwin_arm64.tar.gz"
     end
     on_intel do
       sha256 "25ab73769bf054177cea62ab7777597786020aa75922739b37e2ded1b0d3ea20"
-      url "https://github.com/SvetlovA/ralphex/releases/download/v#{version}/ralphex_#{version}_darwin_amd64.tar.gz"
+      url "https://github.com/svtlv/ralphex/releases/download/v#{version}/ralphex_#{version}_darwin_amd64.tar.gz"
     end
   end
   on_linux do
     on_arm do
       sha256 "90f08484656660daa75a62e08a061b5b464755161bf57a811991985c9504428e"
-      url "https://github.com/SvetlovA/ralphex/releases/download/v#{version}/ralphex_#{version}_linux_arm64.tar.gz"
+      url "https://github.com/svtlv/ralphex/releases/download/v#{version}/ralphex_#{version}_linux_arm64.tar.gz"
     end
     on_intel do
       sha256 "327ffa8da0151001fd47805de84e3bc7eabf72c9935a72bf9e7936555cc3b702"
-      url "https://github.com/SvetlovA/ralphex/releases/download/v#{version}/ralphex_#{version}_linux_amd64.tar.gz"
+      url "https://github.com/svtlv/ralphex/releases/download/v#{version}/ralphex_#{version}_linux_amd64.tar.gz"
     end
   end
 
   name "ralphex.windows"
   desc "Autonomous plan execution with Claude Code"
-  homepage "https://github.com/SvetlovA/ralphex"
+  homepage "https://github.com/svtlv/ralphex"
 
   livecheck do
     skip "Auto-generated on release."

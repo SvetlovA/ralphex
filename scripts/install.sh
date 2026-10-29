@@ -30,10 +30,10 @@ else
     fail 'sha256sum or shasum is required'
 fi
 
-repository=https://github.com/SvetlovA/ralphex
+repository=https://github.com/svtlv/ralphex
 tag=${RALPHEX_VERSION:-}
 if [ -z "$tag" ]; then
-    release=$(curl -fsSL --retry 3 https://api.github.com/repos/SvetlovA/ralphex/releases/latest)
+    release=$(curl -fsSL --retry 3 https://api.github.com/repos/svtlv/ralphex/releases/latest)
     tag=$(printf '%s\n' "$release" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
 fi
 printf '%s\n' "$tag" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+-windows\.[1-9][0-9]*$' || fail "invalid fork release tag: $tag"

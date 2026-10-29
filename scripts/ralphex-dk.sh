@@ -70,7 +70,7 @@ from urllib.request import urlopen
 
 DEFAULT_IMAGE = "ghcr.io/svetlova/ralphex-go:latest"
 DEFAULT_PORT = "8080"
-SCRIPT_URL = "https://raw.githubusercontent.com/SvetlovA/ralphex/windows/scripts/ralphex-dk.sh"
+SCRIPT_URL = "https://raw.githubusercontent.com/svtlv/ralphex/windows/scripts/ralphex-dk.sh"
 SENSITIVE_PATTERNS = ["KEY", "SECRET", "TOKEN", "PASSWORD", "PASSWD", "CREDENTIAL", "AUTH"]
 VALID_CLAUDE_PROVIDERS = ["default", "bedrock"]
 DEFAULT_DOCKER_SOCKET = "/var/run/docker.sock"

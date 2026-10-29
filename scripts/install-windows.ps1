@@ -6,7 +6,7 @@ param(
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
-$repository = "SvetlovA/ralphex"
+$repository = "svtlv/ralphex"
 $executable = "ralphex.windows.exe"
 $architecture = switch ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture) {
     "X64" { "amd64" }

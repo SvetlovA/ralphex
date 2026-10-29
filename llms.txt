@@ -2,14 +2,14 @@
 
 Autonomous plan execution with Claude Code. Executes implementation plans task by task in fresh Claude sessions, then runs multi-phase code reviews. Write a plan, start ralphex, walk away.
 
-**GitHub:** https://github.com/SvetlovA/ralphex
+**GitHub:** https://github.com/svtlv/ralphex
 
 ## Installation
 
 macOS with Homebrew:
 
 ```bash
-brew tap SvetlovA/ralphex https://github.com/SvetlovA/ralphex.git
+brew tap svtlv/ralphex https://github.com/svtlv/ralphex.git
 brew install --cask ralphex.windows
 ralphex.windows --version
 ```
@@ -19,7 +19,7 @@ Homebrew installs the `ralphex.windows` command; use it in place of `ralphex` be
 Linux/macOS installer (amd64/arm64, verifies SHA-256, installs to `~/.local/bin`):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/SvetlovA/ralphex/windows/scripts/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/svtlv/ralphex/windows/scripts/install.sh | sh
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
@@ -35,15 +35,15 @@ Use `@windows` for the latest commit on the `windows` branch, including changes 
 
 Add the Go bin directory (normally `~/go/bin`, or your configured `GOBIN`) to PATH. On Linux/macOS, persist `export PATH="$HOME/go/bin:$PATH"` in your shell configuration. On Windows, add that directory to your user `Path` and open a new terminal.
 
-Linux/macOS: download the matching archive from https://github.com/SvetlovA/ralphex/releases and install `ralphex` on your `PATH`. Linux DEB and RPM packages are also provided.
+Linux/macOS: download the matching archive from https://github.com/svtlv/ralphex/releases and install `ralphex` on your `PATH`. Linux DEB and RPM packages are also provided.
 
 Windows:
 
 ```powershell
 # Windows installer from this repository
-irm https://raw.githubusercontent.com/SvetlovA/ralphex/windows/scripts/install-windows.ps1 | iex
+irm https://raw.githubusercontent.com/svtlv/ralphex/windows/scripts/install-windows.ps1 | iex
 
-# releases: https://github.com/SvetlovA/ralphex/releases
+# releases: https://github.com/svtlv/ralphex/releases
 ```
 
 The Windows installer and `go install` install `ralphex.windows.exe` on Windows. Use that command instead of `ralphex` in the examples below. On Linux and macOS, `go install` names the command `ralphex.windows`. Build from a Windows checkout with `make -f build/windows/Makefile build` to produce `.bin/ralphex.windows.exe` on the `windows` branch or `.bin/ralphex.windows.<branch>.exe` on other branches (or tags).
@@ -256,7 +256,7 @@ ralphex provides Docker images for isolated execution:
 **Using Docker wrapper** (requires Python 3.9+):
 ```bash
 # install wrapper script (defaults to Go image)
-curl -sL https://raw.githubusercontent.com/SvetlovA/ralphex/windows/scripts/ralphex-dk.sh -o /usr/local/bin/ralphex
+curl -sL https://raw.githubusercontent.com/svtlv/ralphex/windows/scripts/ralphex-dk.sh -o /usr/local/bin/ralphex
 chmod +x /usr/local/bin/ralphex
 
 # for non-Go projects, use base image
